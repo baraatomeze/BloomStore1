@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تم حظر النشاط</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Cairo', sans-serif; background: #f5f7f9; color: #333; }
+        .wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .card { background: #fff; width: 100%; max-width: 700px; border-radius: 16px; padding: 32px; box-shadow: 0 10px 30px rgba(0,0,0,.08); text-align: center; }
+        .icon { width: 88px; height: 88px; border-radius: 50%; background: #ffeaea; color: #c0392b; display: flex; align-items: center; justify-content: center; font-size: 40px; margin: 0 auto 16px; }
+        h1 { color: #c0392b; margin-bottom: 10px; font-size: 28px; }
+        p { color: #555; line-height: 1.8; margin-bottom: 8px; }
+        .details { background: #fafafa; border: 1px dashed #ddd; padding: 12px; border-radius: 10px; margin-top: 16px; font-size: 14px; color: #666; }
+        .btns { display: flex; gap: 12px; justify-content: center; margin-top: 20px; flex-wrap: wrap; }
+        .btn { padding: 12px 18px; border-radius: 10px; border: 0; cursor: pointer; font-weight: 700; }
+        .primary { background: #054334; color: #fff; }
+        .secondary { background: #eaecef; color: #333; }
+        .hint { font-size: 12px; color: #888; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="card">
+            <div class="icon">⚠️</div>
+            <h1>تم منع النشاط المشبوه</h1>
+            <p>اكتشف النظام مدخلاً أو طلباً يحتوي على أنماط قد تُستخدم في هجمات <strong>SQL Injection</strong> أو <strong>XSS</strong>.</p>
+            <p>حفاظاً على أمان النظام والمستخدمين، تم إيقاف تنفيذ الطلب.</p>
+            <div class="details">
+                إذا كنت ترى هذه الصفحة عن طريق الخطأ، تأكد من أن المدخلات لا تحتوي على أكواد أو أوامر خاصة.
+            </div>
+            <div class="btns">
+                <button class="btn primary" onclick="window.history.back()">الرجوع للخلف</button>
+                <button class="btn secondary" onclick="window.location.href='/'">العودة للصفحة الرئيسية</button>
+            </div>
+            <div class="hint">رمز: SUSPICIOUS_REQUEST_BLOCKED</div>
+        </div>
+    </div>
+</body>
+</html>
+
