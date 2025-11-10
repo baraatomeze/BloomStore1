@@ -101,14 +101,27 @@ async function sendEmail(email, code) {
 // User Registration with Password Encryption
 app.post('/api/register', async (req, res) => {
     try {
-        const { name, email, password, phone } = req.body;
+        const { name, email, password, phone, address } = req.body;
+        
+        // التحقق من البيانات المطلوبة
+        if (!name || !email || !password) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'الاسم والبريد الإلكتروني وكلمة المرور مطلوبة' 
+            });
+        }
         
         // Check if user already exists
-        const { data: existingUser } = await supabase
+        const { data: existingUser, error: checkError } = await supabase
             .from('users')
             .select('*')
             .eq('email', email)
-            .single();
+            .maybeSingle();
+        
+        if (checkError && checkError.code !== 'PGRST116') {
+            console.error('Error checking existing user:', checkError);
+            throw checkError;
+        }
         
         if (existingUser) {
             return res.status(400).json({ 
@@ -127,7 +140,8 @@ app.post('/api/register', async (req, res) => {
                 name,
                 email,
                 password: hashedPassword,
-                phone,
+                phone: phone || null,
+                address: address || null,
                 role: 'user',
                 is_active: true,
                 created_at: new Date().toISOString()
@@ -136,6 +150,7 @@ app.post('/api/register', async (req, res) => {
             .single();
         
         if (insertError) {
+            console.error('Supabase insert error:', insertError);
             throw insertError;
         }
         
@@ -146,14 +161,16 @@ app.post('/api/register', async (req, res) => {
                 id: user.id,
                 name: user.name,
                 email: user.email,
-                role: user.role
+                role: user.role,
+                phone: user.phone
             }
         });
     } catch (error) {
         console.error('Error in registration:', error);
         res.status(500).json({ 
             success: false, 
-            error: 'خطأ في إنشاء الحساب' 
+            error: error.message || 'خطأ في إنشاء الحساب',
+            details: process.env.NODE_ENV === 'development' ? error : undefined
         });
     }
 });
