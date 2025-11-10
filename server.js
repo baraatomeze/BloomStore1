@@ -23,7 +23,7 @@ const limiter = rateLimit({
 app.use(limiter);
 
 // MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://baraatomeze_db_user:<db_password>@cluster0.rwds1ij.mongodb.net/bloom?retryWrites=true&w=majority&appName=Cluster0', {
+mongoose.connect(process.env.MONGODB_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true
 });
@@ -106,7 +106,7 @@ function generateSecureCode() {
 // Send Email using Gmail (Free)
 async function sendEmail(email, code) {
     try {
-        const transporter = nodemailer.createTransporter({
+        const transporter = nodemailer.createTransport({
             service: 'gmail',
             auth: {
                 user: process.env.EMAIL_USER || 'bloom.company.ps@gmail.com',
@@ -115,7 +115,7 @@ async function sendEmail(email, code) {
         });
         
         const mailOptions = {
-                         from: process.env.EMAIL_FROM || 'Bloom <bloom.company.ps@gmail.com>',
+            from: process.env.EMAIL_FROM || 'Bloom <bloom.company.ps@gmail.com>',
             to: email,
             subject: '🔐 كود التحقق من Bloom',
             html: `
@@ -470,14 +470,32 @@ app.get('/api/health', (req, res) => {
         status: 'OK', 
         timestamp: new Date().toISOString(),
         service: 'Bloom Server with MongoDB & Password Encryption',
-        database: db.readyState === 1 ? 'Connected' : 'Disconnected'
+        database: db.readyState === 1 ? 'Connected' : 'Disconnected',
+        platform: process.env.VERCEL ? 'Vercel' : 'Local'
     });
 });
 
-app.listen(PORT, () => {
-    console.log(`🚀 Bloom Server running on port ${PORT}`);
-    console.log(`🗄️ Database: MongoDB Atlas`);
-    console.log(`🔐 Password Encryption: Enabled (bcrypt)`);
-    console.log(`📧 Email Service: ${process.env.EMAIL_PASSWORD ? 'Enabled (Free)' : 'Disabled'}`);
-    console.log(`💰 Cost: FREE - No charges`);
+// SPA Fallback - Serve index.html for non-API routes
+app.get(/^(?!\/api).*/, (req, res) => {
+    const path = require('path');
+    res.sendFile(path.join(__dirname, 'public', 'index.html'), (err) => {
+        if (err) {
+            res.status(404).json({ error: 'Not Found' });
+        }
+    });
 });
+
+// Start server locally only (Vercel will handle the server)
+if (!process.env.VERCEL) {
+    app.listen(PORT, () => {
+        console.log(`🚀 Bloom Server running on http://localhost:${PORT}`);
+        console.log(`🗄️ Database: MongoDB Atlas`);
+        console.log(`🔐 Password Encryption: Enabled (bcrypt)`);
+        console.log(`📧 Email Service: ${process.env.EMAIL_PASSWORD ? 'Enabled (Free)' : 'Disabled'}`);
+        console.log(`💰 Cost: FREE - No charges`);
+    });
+}
+
+// Export app for Vercel
+module.exports = app;
+
