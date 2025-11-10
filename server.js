@@ -2,13 +2,23 @@ const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const nodemailer = require('nodemailer');
-const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Initialize Supabase
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error('❌ Missing Supabase credentials. Please set SUPABASE_URL and SUPABASE_ANON_KEY in environment variables.');
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Middleware
 app.use(cors());
@@ -21,79 +31,6 @@ const limiter = rateLimit({
     max: 100 // limit each IP to 100 requests per windowMs
 });
 app.use(limiter);
-
-// MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-});
-
-const db = mongoose.connection;
-db.on('error', console.error.bind(console, 'MongoDB connection error:'));
-db.once('open', () => {
-    console.log('✅ Connected to MongoDB Atlas');
-});
-
-// User Schema with Password Encryption
-const userSchema = new mongoose.Schema({
-    name: { type: String, required: true },
-    email: { type: String, required: true, unique: true },
-    password: { type: String, required: true }, // Will be encrypted with bcrypt
-    role: { type: String, enum: ['admin', 'manager', 'user'], default: 'user' },
-    phone: String,
-    createdAt: { type: Date, default: Date.now },
-    lastLogin: Date,
-    isActive: { type: Boolean, default: true }
-});
-
-// Encrypt password before saving
-userSchema.pre('save', async function(next) {
-    if (this.isModified('password')) {
-        this.password = await bcrypt.hash(this.password, 12);
-    }
-    next();
-});
-
-// Method to verify password
-userSchema.methods.verifyPassword = async function(password) {
-    return await bcrypt.compare(password, this.password);
-};
-
-const User = mongoose.model('User', userSchema);
-
-// Product Schema
-const productSchema = new mongoose.Schema({
-    name: { type: String, required: true },
-    price: { type: Number, required: true },
-    description: String,
-    image: String,
-    category: String,
-    stock: { type: Number, default: 0 },
-    createdAt: { type: Date, default: Date.now }
-});
-
-const Product = mongoose.model('Product', productSchema);
-
-// Order Schema
-const orderSchema = new mongoose.Schema({
-    customerName: { type: String, required: true },
-    customerEmail: { type: String, required: true },
-    customerPhone: { type: String, required: true },
-    customerAddress: { type: String, required: true },
-    shippingLocation: { type: String, required: true },
-    shippingCost: { type: Number, required: true },
-    items: [{
-        productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
-        name: String,
-        price: Number,
-        quantity: Number
-    }],
-    totalAmount: { type: Number, required: true },
-    status: { type: String, enum: ['pending', 'confirmed', 'shipped', 'delivered'], default: 'pending' },
-    createdAt: { type: Date, default: Date.now }
-});
-
-const Order = mongoose.model('Order', orderSchema);
 
 // Store verification codes (in production, use Redis or database)
 const verificationCodes = new Map();
@@ -167,7 +104,12 @@ app.post('/api/register', async (req, res) => {
         const { name, email, password, phone } = req.body;
         
         // Check if user already exists
-        const existingUser = await User.findOne({ email });
+        const { data: existingUser } = await supabase
+            .from('users')
+            .select('*')
+            .eq('email', email)
+            .single();
+        
         if (existingUser) {
             return res.status(400).json({ 
                 success: false, 
@@ -175,22 +117,33 @@ app.post('/api/register', async (req, res) => {
             });
         }
         
-        // Create new user (password will be encrypted automatically)
-        const user = new User({
-            name,
-            email,
-            password, // Will be encrypted by pre-save hook
-            phone,
-            role: 'user'
-        });
+        // Hash password
+        const hashedPassword = await bcrypt.hash(password, 12);
         
-        await user.save();
+        // Create new user
+        const { data: user, error: insertError } = await supabase
+            .from('users')
+            .insert({
+                name,
+                email,
+                password: hashedPassword,
+                phone,
+                role: 'user',
+                is_active: true,
+                created_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+        
+        if (insertError) {
+            throw insertError;
+        }
         
         res.json({ 
             success: true, 
             message: 'تم إنشاء الحساب بنجاح',
             user: {
-                id: user._id,
+                id: user.id,
                 name: user.name,
                 email: user.email,
                 role: user.role
@@ -211,8 +164,13 @@ app.post('/api/login', async (req, res) => {
         const { email, password } = req.body;
         
         // Find user by email
-        const user = await User.findOne({ email });
-        if (!user) {
+        const { data: user, error: findError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('email', email)
+            .single();
+        
+        if (findError || !user) {
             return res.status(401).json({ 
                 success: false, 
                 error: 'بيانات غير صحيحة' 
@@ -220,7 +178,7 @@ app.post('/api/login', async (req, res) => {
         }
         
         // Verify password
-        const isValidPassword = await user.verifyPassword(password);
+        const isValidPassword = await bcrypt.compare(password, user.password);
         if (!isValidPassword) {
             return res.status(401).json({ 
                 success: false, 
@@ -229,12 +187,14 @@ app.post('/api/login', async (req, res) => {
         }
         
         // Update last login
-        user.lastLogin = new Date();
-        await user.save();
+        await supabase
+            .from('users')
+            .update({ last_login: new Date().toISOString() })
+            .eq('id', user.id);
         
         // Create JWT token
         const token = jwt.sign(
-            { userId: user._id, role: user.role }, 
+            { userId: user.id, role: user.role }, 
             process.env.JWT_SECRET || 'bloom_jwt_secret_key_2024',
             { expiresIn: '24h' }
         );
@@ -243,7 +203,7 @@ app.post('/api/login', async (req, res) => {
             success: true, 
             message: 'تم تسجيل الدخول بنجاح',
             user: {
-                id: user._id,
+                id: user.id,
                 name: user.name,
                 email: user.email,
                 role: user.role,
@@ -275,10 +235,10 @@ app.post('/api/send-email-code', async (req, res) => {
         // Generate verification code
         const code = generateSecureCode();
         
-        // Store code with expiry (1 minute)
+        // Store code with expiry (5 minutes)
         verificationCodes.set(email, {
             code,
-            expiry: Date.now() + (1 * 60 * 1000)
+            expiry: Date.now() + (5 * 60 * 1000)
         });
         
         // Send Email (Free)
@@ -309,7 +269,7 @@ app.post('/api/send-email-code', async (req, res) => {
 // Verify code
 app.post('/api/verify-code', (req, res) => {
     try {
-        const { identifier, code } = req.body; // identifier can be email or phone
+        const { identifier, code } = req.body;
         
         if (!identifier || !code) {
             return res.status(400).json({ 
@@ -365,16 +325,23 @@ app.post('/api/products', async (req, res) => {
     try {
         const { name, price, description, image, category, stock } = req.body;
         
-        const product = new Product({
-            name,
-            price,
-            description,
-            image,
-            category,
-            stock
-        });
+        const { data: product, error } = await supabase
+            .from('products')
+            .insert({
+                name,
+                price,
+                description,
+                image,
+                category,
+                stock: stock || 0,
+                created_at: new Date().toISOString()
+            })
+            .select()
+            .single();
         
-        await product.save();
+        if (error) {
+            throw error;
+        }
         
         res.json({ 
             success: true, 
@@ -392,10 +359,17 @@ app.post('/api/products', async (req, res) => {
 
 app.get('/api/products', async (req, res) => {
     try {
-        const products = await Product.find({});
+        const { data: products, error } = await supabase
+            .from('products')
+            .select('*');
+        
+        if (error) {
+            throw error;
+        }
+        
         res.json({ 
             success: true, 
-            products 
+            products: products || []
         });
     } catch (error) {
         console.error('Error fetching products:', error);
@@ -411,18 +385,26 @@ app.post('/api/orders', async (req, res) => {
     try {
         const { customerName, customerEmail, customerPhone, customerAddress, shippingLocation, shippingCost, items, totalAmount } = req.body;
         
-        const order = new Order({
-            customerName,
-            customerEmail,
-            customerPhone,
-            customerAddress,
-            shippingLocation,
-            shippingCost,
-            items,
-            totalAmount
-        });
+        const { data: order, error } = await supabase
+            .from('orders')
+            .insert({
+                customer_name: customerName,
+                customer_email: customerEmail,
+                customer_phone: customerPhone,
+                customer_address: customerAddress,
+                shipping_location: shippingLocation,
+                shipping_cost: shippingCost,
+                items: items,
+                total_amount: totalAmount,
+                status: 'pending',
+                created_at: new Date().toISOString()
+            })
+            .select()
+            .single();
         
-        await order.save();
+        if (error) {
+            throw error;
+        }
         
         res.json({ 
             success: true, 
@@ -440,10 +422,18 @@ app.post('/api/orders', async (req, res) => {
 
 app.get('/api/orders', async (req, res) => {
     try {
-        const orders = await Order.find({}).populate('items.productId');
+        const { data: orders, error } = await supabase
+            .from('orders')
+            .select('*')
+            .order('created_at', { ascending: false });
+        
+        if (error) {
+            throw error;
+        }
+        
         res.json({ 
             success: true, 
-            orders 
+            orders: orders || []
         });
     } catch (error) {
         console.error('Error fetching orders:', error);
@@ -465,14 +455,28 @@ setInterval(() => {
 }, 1 * 60 * 1000);
 
 // Health check
-app.get('/api/health', (req, res) => {
-    res.json({ 
-        status: 'OK', 
-        timestamp: new Date().toISOString(),
-        service: 'Bloom Server with MongoDB & Password Encryption',
-        database: db.readyState === 1 ? 'Connected' : 'Disconnected',
-        platform: process.env.VERCEL ? 'Vercel' : 'Local'
-    });
+app.get('/api/health', async (req, res) => {
+    try {
+        // Test Supabase connection
+        const { data, error } = await supabase.from('users').select('count').limit(1);
+        
+        res.json({ 
+            status: 'OK', 
+            timestamp: new Date().toISOString(),
+            service: 'Bloom Server with Supabase',
+            database: error ? 'Disconnected' : 'Connected',
+            platform: process.env.VERCEL ? 'Vercel' : 'Local'
+        });
+    } catch (error) {
+        res.json({
+            status: 'OK',
+            timestamp: new Date().toISOString(),
+            service: 'Bloom Server with Supabase',
+            database: 'Error',
+            platform: process.env.VERCEL ? 'Vercel' : 'Local',
+            error: error.message
+        });
+    }
 });
 
 // SPA Fallback - Serve index.html for non-API routes
@@ -489,7 +493,7 @@ app.get(/^(?!\/api).*/, (req, res) => {
 if (!process.env.VERCEL) {
     app.listen(PORT, () => {
         console.log(`🚀 Bloom Server running on http://localhost:${PORT}`);
-        console.log(`🗄️ Database: MongoDB Atlas`);
+        console.log(`🗄️ Database: Supabase`);
         console.log(`🔐 Password Encryption: Enabled (bcrypt)`);
         console.log(`📧 Email Service: ${process.env.EMAIL_PASSWORD ? 'Enabled (Free)' : 'Disabled'}`);
         console.log(`💰 Cost: FREE - No charges`);
@@ -498,4 +502,3 @@ if (!process.env.VERCEL) {
 
 // Export app for Vercel
 module.exports = app;
-
