@@ -331,27 +331,16 @@ function isSuspiciousClient(value) {
     return check(s);
 
     function check(str) {
-        // استثناء: كلمات المرور القصيرة (أقل من 50 حرف) مع أحرف عادية آمنة
-        if (str.length < 50 && /^[a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/? ]+$/.test(String(value))) {
-            // فقط منع كلمات SQL خطيرة في كلمات المرور
-            const dangerousSQL = /(union|select|insert|update|delete|drop|alter|exec|execute)\s+/i;
-            if (dangerousSQL.test(str)) {
-                return true; // منع فقط إذا كان يحتوي على كلمات SQL خطيرة
-            }
-            return false; // كلمات المرور العادية آمنة
-        }
-        
-        // فحص الأنماط الخطيرة فقط
         const patterns = [
             /<\s*script/,
             /onerror\s*=|onload\s*=|onclick\s*=/,
             /javascript:\s*/,
-            /(union\s+all\s+select|union\s+select)/i,
-            /(select\s+.*\s+from)/i,
-            /insert\s+into|update\s+.*\s+set|delete\s+from|drop\s+table|alter\s+table/i,
-            /;--|\/\*/,
-            /or\s+1\s*=\s*1|and\s+1\s*=\s*1/i,
-            /sleep\s*\(\s*\d+\s*\)/i
+            /(union\s+all\s+select|union\s+select)/,
+            /(select\s+.*\s+from)/,
+            /insert\s+into|update\s+.*\s+set|delete\s+from|drop\s+table|alter\s+table/,
+            /--|;--|#|\/\*/,
+            /or\s+1\s*=\s*1|and\s+1\s*=\s*1/,
+            /sleep\s*\(\s*\d+\s*\)/
         ];
         return patterns.some(rx => rx.test(str));
     }
@@ -543,16 +532,16 @@ async function handleLogin(event) {
 async function handleRegister(event) {
     event.preventDefault();
     
-    const name = document.getElementById('registerName')?.value || '';
-    const phone = document.getElementById('registerPhone')?.value || '';
-    const email = document.getElementById('registerEmail')?.value || '';
-    const password = document.getElementById('registerPassword')?.value || '';
-    const confirmPassword = document.getElementById('confirmPassword')?.value || '';
-    const address = document.getElementById('registerAddress')?.value || '';
-    
-    // التحقق من البيانات المطلوبة (الاسم والبريد وكلمة المرور فقط)
-    if (!name || !email || !password) {
-        showMessage('يرجى إدخال الاسم والبريد الإلكتروني وكلمة المرور', 'error');
+    const name = document.getElementById('registerName').value;
+    const phone = document.getElementById('registerPhone').value;
+    const email = document.getElementById('registerEmail').value;
+    const password = document.getElementById('registerPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+    const address = document.getElementById('registerAddress').value;
+
+    // التحقق من البيانات المطلوبة الأساسية
+    if (!name || !email || !password || !confirmPassword) {
+        showMessage('يرجى إدخال الاسم والبريد الإلكتروني وكلمة المرور وتأكيدها', 'error');
         return;
     }
     
@@ -569,13 +558,6 @@ async function handleRegister(event) {
         return;
     }
     
-    // فحص الحماية (لكن أقل صرامة للتسجيل)
-    if (isSuspiciousClient(name) || isSuspiciousClient(email)) {
-        showMessage('تم منع هذا الإدخال: نشاط مشبوه (XSS/SQLi)', 'error');
-        window.location.href = '/suspicious.html';
-        return;
-    }
-    
     try {
         // محاولة التسجيل في قاعدة البيانات الحقيقية
         const response = await fetch('/api/register', {
@@ -583,7 +565,13 @@ async function handleRegister(event) {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ name, email, password, phone: phone || null, address: address || null })
+            body: JSON.stringify({ 
+                name, 
+                email, 
+                password, 
+                phone: phone || null, 
+                address: address || null 
+            })
         });
         
         const data = await response.json();
