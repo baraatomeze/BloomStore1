@@ -775,9 +775,14 @@ app.post('/api/login', async (req, res) => {
       .select('*')
       .eq('email', email)
       .eq('is_active', true)
-      .single();
+      .maybeSingle();
 
-    if (fetchError || !users) {
+    if (fetchError) {
+      console.error('Login fetch error:', fetchError);
+      return res.status(500).json({ success: false, error: 'SERVER_ERROR' });
+    }
+
+    if (!users) {
       return res.status(401).json({ success: false, error: 'INVALID_CREDENTIALS' });
     }
     
@@ -880,11 +885,16 @@ app.post('/api/register', async (req, res) => {
     }
 
     // التحقق من وجود المستخدم
-    const { data: existingUser } = await supabase
+    const { data: existingUser, error: existingUserError } = await supabase
       .from('users')
       .select('email')
       .eq('email', email)
-      .single();
+      .maybeSingle();
+
+    if (existingUserError && existingUserError.code !== 'PGRST116') {
+      console.error('Check existing user error:', existingUserError);
+      return res.status(500).json({ success: false, error: 'SERVER_ERROR' });
+    }
 
     if (existingUser) {
       return res.status(400).json({ success: false, error: 'USER_ALREADY_EXISTS' });
