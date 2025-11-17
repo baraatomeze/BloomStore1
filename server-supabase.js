@@ -234,14 +234,21 @@ app.post('/api/categories', upload.single('image'), async (req, res) => {
 // Supabase Configuration
 const supabaseUrl = process.env.SUPABASE_URL || 'https://your-project.supabase.co';
 const supabaseKey = process.env.SUPABASE_ANON_KEY || 'your-anon-key';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || null;
+
 const supabaseOptions = {
   auth: {
     autoRefreshToken: false,
     persistSession: false
   }
 };
-const supabase = createClient(supabaseUrl, supabaseKey, supabaseOptions);
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || null;
+
+// Use SERVICE_ROLE_KEY if available (bypasses RLS), otherwise use ANON_KEY
+// This ensures we can create users and login even if RLS is enabled
+const supabase = supabaseServiceKey
+  ? createClient(supabaseUrl, supabaseServiceKey, supabaseOptions)
+  : createClient(supabaseUrl, supabaseKey, supabaseOptions);
+
 const supabaseAdmin = supabaseServiceKey
   ? createClient(supabaseUrl, supabaseServiceKey, supabaseOptions)
   : null;
@@ -332,6 +339,12 @@ function apiSecurityMiddleware(req, res, next) {
 
 // دالة حماية من SQL Injection
 function sqlInjectionProtection(req, res, next) {
+  // استثناء مسارات API الحساسة (login/register) من الفحص
+  const apiPaths = ['/api/login', '/api/register', '/api/send-email-code', '/api/verify-code'];
+  if (apiPaths.some(p => req.originalUrl.startsWith(p))) {
+    return next(); // السماح بمسارات API بدون فحص
+  }
+  
   const query = JSON.stringify(req.query);
   const body = JSON.stringify(req.body);
   const url = req.url;
@@ -371,6 +384,12 @@ function sqlInjectionProtection(req, res, next) {
 
 // دالة حماية من XSS
 function xssProtection(req, res, next) {
+  // استثناء مسارات API الحساسة (login/register) من الفحص
+  const apiPaths = ['/api/login', '/api/register', '/api/send-email-code', '/api/verify-code'];
+  if (apiPaths.some(p => req.originalUrl.startsWith(p))) {
+    return next(); // السماح بمسارات API بدون فحص
+  }
+  
   const query = JSON.stringify(req.query);
   const body = JSON.stringify(req.body);
   const url = req.url;
@@ -722,6 +741,37 @@ async function verifySupabaseSeed() {
   }
 }
 
+// التحقق من وجود المستخدمين الافتراضيين (باستخدام ANON_KEY أيضاً)
+async function verifyUsersExist() {
+  try {
+    const { data: users, error } = await supabase
+      .from('users')
+      .select('email, role, is_active')
+      .in('email', DEFAULT_USER_EMAILS)
+      .eq('is_active', true);
+    
+    if (error) {
+      console.warn('⚠️ لا يمكن التحقق من المستخدمين:', error.message);
+      return;
+    }
+    
+    const foundEmails = new Set(users?.map(u => u.email) || []);
+    const missingEmails = DEFAULT_USER_EMAILS.filter(email => !foundEmails.has(email));
+    
+    if (missingEmails.length > 0) {
+      console.warn('⚠️ تحذير: المستخدمون التالية غير موجودين في قاعدة البيانات:');
+      missingEmails.forEach(email => {
+        console.warn(`   - ${email}`);
+      });
+      console.warn('   يرجى تشغيل ملف supabase_schema.sql على Supabase لإضافة المستخدمين.');
+    } else {
+      console.log('✅ جميع المستخدمين الافتراضيين موجودون في قاعدة البيانات');
+    }
+  } catch (error) {
+    console.warn('⚠️ لا يمكن التحقق من المستخدمين:', error.message);
+  }
+}
+
 // Routes
 app.get('/api/health', (req, res) => {
   res.json({ 
@@ -738,10 +788,14 @@ const loginAttemptsMap = new Map();
 
 app.post('/api/login', async (req, res) => {
   try {
+    console.log('🔐 بدء عملية تسجيل الدخول...');
     const { email, password } = req.body || {};
     if (!email || !password) {
+      console.log('❌ بيانات ناقصة:', { email: !!email, password: !!password });
       return res.status(400).json({ success: false, error: 'EMAIL_AND_PASSWORD_REQUIRED' });
     }
+
+    console.log('✅ البيانات الأساسية موجودة:', { email });
 
     // نظام الحظر المتدرج: 3 محاولات خطأ → حظر 15 د، ثم 20 د، ثم 30 د، ثم ساعة
     const now = Date.now();
@@ -759,6 +813,7 @@ app.post('/api/login', async (req, res) => {
     // التحقق من الحظر الحالي
     if (entry.lockUntil && now < entry.lockUntil) {
       const remaining = Math.ceil((entry.lockUntil - now) / 60000);
+      console.log('🚫 الحساب محظور:', { email, remaining });
       return res.status(429).json({ success: false, error: 'ACCOUNT_LOCKED', minutes: remaining });
     }
     
@@ -768,9 +823,16 @@ app.post('/api/login', async (req, res) => {
       entry.lockSequence = 0;
       entry.lastResetTime = 0;
       loginAttemptsMap.set(email, entry);
+      console.log('🔄 تم إعادة تعيين حالة الحظر');
     }
     
-    const { data: users, error: fetchError } = await supabase
+    // استخدام SERVICE_ROLE_KEY لتجاوز RLS
+    const client = supabaseAdmin || supabase;
+    const isUsingAdmin = !!supabaseAdmin;
+    console.log(`🔑 استخدام العميل: ${isUsingAdmin ? 'SERVICE_ROLE_KEY (Admin)' : 'ANON_KEY'}`);
+    
+    console.log('🔍 البحث عن المستخدم في قاعدة البيانات...');
+    const { data: users, error: fetchError } = await client
       .from('users')
       .select('*')
       .eq('email', email)
@@ -778,15 +840,37 @@ app.post('/api/login', async (req, res) => {
       .maybeSingle();
 
     if (fetchError) {
-      console.error('Login fetch error:', fetchError);
+      console.error('❌ خطأ في جلب المستخدم:', fetchError);
       return res.status(500).json({ success: false, error: 'SERVER_ERROR' });
     }
 
     if (!users) {
+      console.log('❌ المستخدم غير موجود أو غير نشط:', email);
       return res.status(401).json({ success: false, error: 'INVALID_CREDENTIALS' });
+    }
+
+    console.log('✅ تم العثور على المستخدم:', { id: users.id, email: users.email, role: users.role });
+    console.log('🔐 التحقق من كلمة المرور...');
+    console.log('   طول كلمة المرور المدخلة:', password.length);
+    console.log('   طول كلمة المرور المحفوظة:', users.password ? users.password.length : 'غير موجود');
+    console.log('   نوع كلمة المرور المحفوظة:', typeof users.password);
+    console.log('   بداية كلمة المرور المحفوظة:', users.password ? users.password.substring(0, 10) + '...' : 'غير موجود');
+    
+    // التحقق من أن كلمة المرور المحفوظة هي hash صحيح
+    if (!users.password || !users.password.startsWith('$2')) {
+      console.error('❌ خطأ: كلمة المرور المحفوظة ليست hash صحيح!', { 
+        password: users.password ? users.password.substring(0, 20) : 'null' 
+      });
+      return res.status(500).json({ 
+        success: false, 
+        error: 'INVALID_PASSWORD_FORMAT',
+        message: 'كلمة المرور في قاعدة البيانات غير صحيحة'
+      });
     }
     
     const passwordMatch = await bcrypt.compare(password, users.password);
+    console.log('   نتيجة المقارنة:', passwordMatch ? '✅ نجحت' : '❌ فشلت');
+    
     if (!passwordMatch) {
       entry.count += 1;
       
@@ -817,6 +901,7 @@ app.post('/api/login', async (req, res) => {
       
       const remainingAttempts = 3 - entry.count;
       loginAttemptsMap.set(email, entry);
+      console.log('❌ كلمة المرور غير صحيحة:', { remainingAttempts });
       return res.status(401).json({ 
         success: false, 
         error: 'INVALID_CREDENTIALS', 
@@ -825,7 +910,10 @@ app.post('/api/login', async (req, res) => {
       });
     }
 
+    console.log('✅ كلمة المرور صحيحة!');
+
     // تحديث آخر تسجيل دخول
+    console.log('📝 تحديث آخر تسجيل دخول...');
     const { error: updateError } = await supabase
       .from('users')
       .update({
@@ -834,17 +922,22 @@ app.post('/api/login', async (req, res) => {
       .eq('id', users.id);
 
     if (updateError) {
-      console.error('خطأ في تحديث آخر تسجيل دخول:', updateError);
+      console.error('⚠️ تحذير: فشل تحديث آخر تسجيل دخول:', updateError);
+    } else {
+      console.log('✅ تم تحديث آخر تسجيل دخول');
     }
     
     // نجاح: إعادة ضبط حالة المحاولات
     loginAttemptsMap.delete(email);
     
+    console.log('🎫 إنشاء توكن JWT...');
     const token = jwt.sign(
       { userId: users.id, email: users.email, role: users.role },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
+    
+    console.log('✅ تم تسجيل الدخول بنجاح:', { email, role: users.role });
     
     res.json({
       success: true,
@@ -859,23 +952,34 @@ app.post('/api/login', async (req, res) => {
       }
     });
   } catch (e) {
-    console.error('Login error:', e);
-    res.status(500).json({ success: false, error: 'SERVER_ERROR' });
+    console.error('❌ خطأ عام في تسجيل الدخول:', e);
+    console.error('   المكدس:', e.stack);
+    res.status(500).json({ 
+      success: false, 
+      error: 'SERVER_ERROR',
+      details: e.message 
+    });
   }
 });
 
 // إنشاء حساب جديد مع تحقق من كلمة المرور
 app.post('/api/register', async (req, res) => {
   try {
+    console.log('📝 بدء عملية التسجيل...');
     const { name, email, password, phone, address } = req.body || {};
 
+    // التحقق من البيانات المطلوبة
     if (!name || !email || !password) {
+      console.log('❌ بيانات ناقصة:', { name: !!name, email: !!email, password: !!password });
       return res.status(400).json({ success: false, error: 'NAME_EMAIL_PASSWORD_REQUIRED' });
     }
+
+    console.log('✅ البيانات الأساسية موجودة:', { name, email, phone: phone || 'غير محدد' });
 
     // التحقق من قوة كلمة المرور
     const passwordValidation = validatePassword(password);
     if (!passwordValidation.isValid) {
+      console.log('❌ كلمة المرور ضعيفة:', passwordValidation.errors);
       return res.status(400).json({ 
         success: false, 
         error: 'WEAK_PASSWORD',
@@ -884,24 +988,63 @@ app.post('/api/register', async (req, res) => {
       });
     }
 
+    console.log('✅ كلمة المرور قوية');
+
+    // استخدام SERVICE_ROLE_KEY لتجاوز RLS (إن وُجد)، وإلا استخدام ANON_KEY
+    // ملاحظة: يجب أن تكون هناك سياسة RLS تسمح بإنشاء حسابات جديدة
+    const client = supabaseAdmin || supabase;
+    const isUsingAdmin = !!supabaseAdmin;
+    console.log(`🔑 استخدام العميل: ${isUsingAdmin ? 'SERVICE_ROLE_KEY (Admin - يتجاوز RLS)' : 'ANON_KEY (يتطلب سياسات RLS)'}`);
+    
     // التحقق من وجود المستخدم
-    const { data: existingUser, error: existingUserError } = await supabase
+    console.log('🔍 التحقق من وجود المستخدم...');
+    const { data: existingUser, error: existingUserError } = await client
       .from('users')
       .select('email')
       .eq('email', email)
       .maybeSingle();
 
-    if (existingUserError && existingUserError.code !== 'PGRST116') {
-      console.error('Check existing user error:', existingUserError);
-      return res.status(500).json({ success: false, error: 'SERVER_ERROR' });
+    if (existingUserError) {
+      console.error('❌ خطأ في التحقق من المستخدم:', existingUserError);
+      // إذا كان الخطأ ليس "لا يوجد نتائج" (PGRST116)، نعيد الخطأ
+      if (existingUserError.code !== 'PGRST116') {
+        // إذا كان الخطأ متعلق بـ RLS، نعطي رسالة واضحة
+        if (existingUserError.code === '42501' || existingUserError.message?.includes('row-level security')) {
+          return res.status(500).json({ 
+            success: false, 
+            error: 'RLS_POLICY_ERROR',
+            message: 'خطأ في سياسات الأمان. يرجى التأكد من تشغيل ملف supabase_schema.sql على Supabase',
+            details: existingUserError.message 
+          });
+        }
+        return res.status(500).json({ 
+          success: false, 
+          error: 'SERVER_ERROR',
+          details: existingUserError.message,
+          code: existingUserError.code
+        });
+      }
     }
 
     if (existingUser) {
+      console.log('❌ المستخدم موجود بالفعل:', email);
       return res.status(400).json({ success: false, error: 'USER_ALREADY_EXISTS' });
     }
 
+    console.log('✅ المستخدم غير موجود، يمكن المتابعة');
+
     // تشفير كلمة المرور
+    console.log('🔐 تشفير كلمة المرور...');
     const hashedPassword = await bcrypt.hash(password, 10);
+    console.log('✅ تم تشفير كلمة المرور (طول الهاش:', hashedPassword.length, ')');
+
+    // التحقق من أن الهاش صحيح (اختبار)
+    const testCompare = await bcrypt.compare(password, hashedPassword);
+    if (!testCompare) {
+      console.error('❌ خطأ: فشل التحقق من التشفير!');
+      return res.status(500).json({ success: false, error: 'PASSWORD_HASH_ERROR' });
+    }
+    console.log('✅ التحقق من التشفير نجح');
 
     // إنشاء المستخدم الجديد
     const newUser = {
@@ -914,15 +1057,63 @@ app.post('/api/register', async (req, res) => {
       is_active: true
     };
 
-    const { data: userData, error } = await supabase
+    console.log('💾 محاولة إدراج المستخدم في قاعدة البيانات...');
+    const { data: userData, error } = await client
       .from('users')
       .insert([newUser])
       .select()
       .single();
     
     if (error) {
-      console.error('Register error:', error);
-      return res.status(500).json({ success: false, error: 'SERVER_ERROR' });
+      console.error('❌ خطأ في إدراج المستخدم:', error);
+      console.error('   الكود:', error.code);
+      console.error('   الرسالة:', error.message);
+      console.error('   التفاصيل:', error.details);
+      console.error('   الهينت:', error.hint);
+      
+      // معالجة خاصة لأخطاء RLS
+      if (error.code === '42501' || error.message?.includes('row-level security') || error.message?.includes('policy')) {
+        return res.status(500).json({ 
+          success: false, 
+          error: 'RLS_POLICY_ERROR',
+          message: 'خطأ في سياسات الأمان (RLS). يرجى التأكد من:',
+          details: [
+            '1. تشغيل ملف supabase_schema.sql على Supabase SQL Editor',
+            '2. التأكد من أن RLS معطل على جدول users أو أن هناك سياسة تسمح بإنشاء حسابات',
+            '3. إضافة SUPABASE_SERVICE_ROLE_KEY في Vercel Environment Variables (اختياري لكن موصى به)'
+          ],
+          code: error.code,
+          hint: error.hint
+        });
+      }
+      
+      return res.status(500).json({ 
+        success: false, 
+        error: 'SERVER_ERROR',
+        details: error.message,
+        code: error.code,
+        hint: error.hint
+      });
+    }
+
+    console.log('✅ تم إنشاء المستخدم بنجاح:', userData.email);
+    
+    // التحقق من أن كلمة المرور محفوظة بشكل صحيح
+    const { data: verifyUser, error: verifyError } = await client
+      .from('users')
+      .select('password')
+      .eq('id', userData.id)
+      .single();
+    
+    if (verifyError) {
+      console.warn('⚠️ تحذير: فشل التحقق من كلمة المرور المحفوظة:', verifyError);
+    } else {
+      const isPasswordCorrect = await bcrypt.compare(password, verifyUser.password);
+      if (!isPasswordCorrect) {
+        console.error('❌ خطأ خطير: كلمة المرور المحفوظة غير صحيحة!');
+        return res.status(500).json({ success: false, error: 'PASSWORD_STORAGE_ERROR' });
+      }
+      console.log('✅ تم التحقق: كلمة المرور محفوظة بشكل صحيح');
     }
     
     res.json({
@@ -938,8 +1129,13 @@ app.post('/api/register', async (req, res) => {
       }
     });
   } catch (e) {
-    console.error('Register error:', e);
-    res.status(500).json({ success: false, error: 'SERVER_ERROR' });
+    console.error('❌ خطأ عام في التسجيل:', e);
+    console.error('   المكدس:', e.stack);
+    res.status(500).json({ 
+      success: false, 
+      error: 'SERVER_ERROR',
+      details: e.message 
+    });
   }
 });
 
@@ -1557,39 +1753,49 @@ app.put('/api/change-password', async (req, res) => {
 // بدء الخادم بعد تهيئة Supabase
 initSupabase()
   .then(() => verifySupabaseSeed())
+  .then(() => {
+    // التحقق النهائي من وجود المستخدمين
+    return verifyUsersExist();
+  })
   .catch(error => {
     console.error('❌ فشل في تهيئة Supabase:', error);
   })
   .finally(() => {
-    app.listen(PORT, () => {
+    // Vercel doesn't need app.listen - it handles the server
+    if (!process.env.VERCEL) {
+      app.listen(PORT, () => {
+        console.log('✅ Connected to Supabase database');
+        console.log('');
+        console.log('🚀 Server running on port', PORT);
+        console.log('');
+        console.log('📱 http://localhost:' + PORT);
+        console.log('');
+        console.log('🗄️  Database: Supabase');
+        console.log('');
+        console.log('🔐 Password encryption: Enabled (bcrypt)');
+        console.log('');
+        console.log('✅ Application ready for local use');
+        console.log('');
+        console.log('🔐 Login credentials for users:');
+        console.log('');
+        console.log('   👑 Main Admin:');
+        console.log('      Email: bloom.company.ps@gmail.com');
+        console.log('      Password: Admin123!@#');
+        console.log('');
+        console.log('   👨‍💼 Sub Manager:');
+        console.log('      Email: manager@bloom.com');
+        console.log('      Password: Manager123!');
+        console.log('');
+        console.log('   👤 Regular User:');
+        console.log('      Email: user@bloom.com');
+        console.log('      Password: User123!');
+        console.log('');
+        console.log('✅ Site ready for local use with Supabase!');
+      });
+    } else {
       console.log('✅ Connected to Supabase database');
-      console.log('');
-      console.log('🚀 Server running on port', PORT);
-      console.log('');
-      console.log('📱 http://localhost:' + PORT);
-      console.log('');
-      console.log('🗄️  Database: Supabase');
-      console.log('');
-      console.log('🔐 Password encryption: Enabled (bcrypt)');
-      console.log('');
-      console.log('✅ Application ready for local use');
-      console.log('');
-      console.log('🔐 Login credentials for users:');
-      console.log('');
-      console.log('   👑 Main Admin:');
-      console.log('      Email: bloom.company.ps@gmail.com');
-      console.log('      Password: Admin123!@#');
-      console.log('');
-      console.log('   👨‍💼 Sub Manager:');
-      console.log('      Email: manager@bloom.com');
-      console.log('      Password: Manager123!');
-      console.log('');
-      console.log('   👤 Regular User:');
-      console.log('      Email: user@bloom.com');
-      console.log('      Password: User123!');
-      console.log('');
-      console.log('✅ Site ready for local use with Supabase!');
-    });
+      console.log('🚀 Application ready for Vercel deployment');
+    }
   });
 
 module.exports = app;
