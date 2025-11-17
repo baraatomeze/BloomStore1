@@ -96,6 +96,10 @@ function isSuspiciousString(str) {
     // إذا كان يحتوي على كلمات SQL خطيرة فقط، نمنعه
     const dangerousSQL = /(union|select|insert|update|delete|drop|alter|exec|execute)/i;
     if (dangerousSQL.test(s)) {
+      // لكن استثناء: إذا كانت كلمة مرور عادية (مثل Admin123!@#)، لا نمنعها
+      if (/^(admin|user|manager|password)\d+[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+$/i.test(raw)) {
+        return false; // كلمات مرور عادية آمنة
+      }
       return patterns.some(rx => rx.test(s) || rx.test(decoded));
     }
     return false; // كلمات المرور العادية آمنة
@@ -120,8 +124,11 @@ function suspiciousMiddleware(req, res, next) {
       ];
       if (dangerousPatterns.some(rx => rx.test(bodyStr))) {
         console.warn('🚫 نشاط مشبوه تم منعه في API:', { ip: req.ip, path: req.originalUrl });
-        res.status(403);
-        return res.sendFile(path.join(__dirname, 'public', 'suspicious.html'));
+        return res.status(403).json({ 
+          success: false, 
+          error: 'SUSPICIOUS_ACTIVITY',
+          message: 'تم منع الطلب بسبب نشاط مشبوه'
+        });
       }
       return next(); // السماح بمسارات API
     }
@@ -137,8 +144,30 @@ function suspiciousMiddleware(req, res, next) {
     const hit = bag.find(isSuspiciousString);
     if (hit) {
       console.warn('🚫 نشاط مشبوه تم منعه:', { ip: req.ip, path: req.originalUrl, sample: hit });
-      res.status(403);
-      return res.sendFile(path.join(__dirname, 'public', 'suspicious.html'));
+      // للطلبات API، أرسل JSON. للصفحات، أرسل HTML
+      if (req.originalUrl.startsWith('/api/')) {
+        return res.status(403).json({ 
+          success: false, 
+          error: 'SUSPICIOUS_ACTIVITY',
+          message: 'تم منع الطلب بسبب نشاط مشبوه'
+        });
+      }
+      // للصفحات العادية، حاول إرسال ملف HTML
+      try {
+        return res.status(403).sendFile(path.join(__dirname, 'public', 'suspicious.html'));
+      } catch (e) {
+        // إذا فشل إرسال الملف، أرسل رد HTML بسيط
+        return res.status(403).send(`
+          <!DOCTYPE html>
+          <html>
+          <head><title>تم منع النشاط</title></head>
+          <body style="font-family: Arial; text-align: center; padding: 50px;">
+            <h1>🚫 تم منع النشاط</h1>
+            <p>تم منع هذا الطلب بسبب نشاط مشبوه.</p>
+          </body>
+          </html>
+        `);
+      }
     }
   } catch (e) {
     console.error('Suspicious middleware error:', e);
@@ -149,8 +178,9 @@ function suspiciousMiddleware(req, res, next) {
 // ضع الوسيط بعد تحليل الجسم وقبل تقديم الملفات الثابتة حتى يشمل كل الطلبات
 app.use(suspiciousMiddleware);
 
-app.use(express.static('public'));
-app.use('/uploads', express.static('uploads'));
+// Serve static files
+app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Ensure uploads folder exists
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -795,6 +825,13 @@ app.post('/api/login', async (req, res) => {
       return res.status(400).json({ success: false, error: 'EMAIL_AND_PASSWORD_REQUIRED' });
     }
 
+    // التحقق من صحة البريد الإلكتروني
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      console.log('❌ البريد الإلكتروني غير صحيح:', email);
+      return res.status(400).json({ success: false, error: 'INVALID_EMAIL_FORMAT' });
+    }
+
     console.log('✅ البيانات الأساسية موجودة:', { email });
 
     // نظام الحظر المتدرج: 3 محاولات خطأ → حظر 15 د، ثم 20 د، ثم 30 د، ثم ساعة
@@ -972,6 +1009,13 @@ app.post('/api/register', async (req, res) => {
     if (!name || !email || !password) {
       console.log('❌ بيانات ناقصة:', { name: !!name, email: !!email, password: !!password });
       return res.status(400).json({ success: false, error: 'NAME_EMAIL_PASSWORD_REQUIRED' });
+    }
+
+    // التحقق من صحة البريد الإلكتروني
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      console.log('❌ البريد الإلكتروني غير صحيح:', email);
+      return res.status(400).json({ success: false, error: 'INVALID_EMAIL_FORMAT' });
     }
 
     console.log('✅ البيانات الأساسية موجودة:', { name, email, phone: phone || 'غير محدد' });
@@ -1797,5 +1841,15 @@ initSupabase()
       console.log('🚀 Application ready for Vercel deployment');
     }
   });
+
+// Serve index.html for all non-API routes (SPA fallback) - يجب أن يكون في النهاية بعد جميع الـ routes
+app.get(/^(?!\/api).*/, (req, res) => {
+  try {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  } catch (e) {
+    console.error('Error serving index.html:', e);
+    res.status(500).send('Error loading page');
+  }
+});
 
 module.exports = app;

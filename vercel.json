@@ -4,6 +4,8 @@
     { "src": "server-supabase.js", "use": "@vercel/node" }
   ],
   "routes": [
+    { "src": "/api/(.*)", "dest": "server-supabase.js" },
+    { "src": "/uploads/(.*)", "dest": "server-supabase.js" },
     { "src": "/(.*)", "dest": "server-supabase.js" }
   ]
 }

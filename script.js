@@ -323,7 +323,32 @@ function initializeApp() {
 // ====== Client-side suspicious input check (XSS/SQLi) ======
 function isSuspiciousClient(value) {
     if (value == null) return false;
-    const s = String(value).toLowerCase();
+    const raw = String(value);
+    const s = raw.toLowerCase();
+    
+    // استثناء: إذا كان النص قصير (أقل من 50 حرف) ويحتوي فقط على أحرف عادية، لا نعتبره مشبوهاً
+    // هذا يسمح بكلمات المرور العادية مثل Admin123!@#
+    if (raw.length < 50 && /^[a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/? ]+$/.test(raw)) {
+        // إذا كان يحتوي على كلمات SQL خطيرة فقط، نمنعه
+        const dangerousSQL = /(union|select|insert|update|delete|drop|alter|exec|execute)/i;
+        if (dangerousSQL.test(s)) {
+            // لكن استثناء: إذا كانت كلمة مرور عادية (مثل Admin123!@#)، لا نمنعها
+            if (/^(admin|user|manager|password)\d+[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+$/i.test(raw)) {
+                return false; // كلمات مرور عادية آمنة
+            }
+            // فحص الأنماط الخطيرة فقط
+            const dangerousPatterns = [
+                /<\s*script/i,
+                /javascript:/i,
+                /(union\s+all\s+select|union\s+select)/i,
+                /(select\s+.*\s+from)/i,
+                /insert\s+into|update\s+.*\s+set|delete\s+from|drop\s+table|alter\s+table/i
+            ];
+            return dangerousPatterns.some(rx => rx.test(s));
+        }
+        return false; // كلمات المرور العادية آمنة
+    }
+    
     try {
         const d = decodeURIComponent(s);
         if (check(d)) return true;
@@ -332,15 +357,15 @@ function isSuspiciousClient(value) {
 
     function check(str) {
         const patterns = [
-            /<\s*script/,
-            /onerror\s*=|onload\s*=|onclick\s*=/,
-            /javascript:\s*/,
-            /(union\s+all\s+select|union\s+select)/,
-            /(select\s+.*\s+from)/,
-            /insert\s+into|update\s+.*\s+set|delete\s+from|drop\s+table|alter\s+table/,
-            /--|;--|#|\/\*/,
-            /or\s+1\s*=\s*1|and\s+1\s*=\s*1/,
-            /sleep\s*\(\s*\d+\s*\)/
+            /<\s*script/i,
+            /onerror\s*=|onload\s*=|onclick\s*=/i,
+            /javascript:\s*/i,
+            /(union\s+all\s+select|union\s+select)/i,
+            /(select\s+.*\s+from)/i,
+            /insert\s+into|update\s+.*\s+set|delete\s+from|drop\s+table|alter\s+table/i,
+            /;--|\/\*/,
+            /or\s+1\s*=\s*1|and\s+1\s*=\s*1/i,
+            /sleep\s*\(\s*\d+\s*\)/i
         ];
         return patterns.some(rx => rx.test(str));
     }
@@ -538,10 +563,10 @@ async function handleRegister(event) {
     const password = document.getElementById('registerPassword').value;
     const confirmPassword = document.getElementById('confirmPassword').value;
     const address = document.getElementById('registerAddress').value;
-
-    // التحقق من البيانات المطلوبة الأساسية
-    if (!name || !email || !password || !confirmPassword) {
-        showMessage('يرجى إدخال الاسم والبريد الإلكتروني وكلمة المرور وتأكيدها', 'error');
+    
+    // التحقق من البيانات المطلوبة
+    if (!name || !phone || !email || !password || !confirmPassword || !address) {
+        showMessage('يرجى ملء جميع الحقول المطلوبة', 'error');
         return;
     }
     
@@ -565,13 +590,7 @@ async function handleRegister(event) {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ 
-                name, 
-                email, 
-                password, 
-                phone: phone || null, 
-                address: address || null 
-            })
+            body: JSON.stringify({ name, email, password, phone, address })
         });
         
         const data = await response.json();
