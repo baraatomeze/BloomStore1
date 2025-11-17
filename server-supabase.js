@@ -1,3 +1,14 @@
+// معالجة أخطاء غير متوقعة في بداية التطبيق
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  // لا نوقف العملية، نستمر في العمل
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  // لا نوقف العملية، نستمر في العمل
+});
+
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
@@ -281,13 +292,25 @@ const supabaseOptions = {
 
 // Use SERVICE_ROLE_KEY if available (bypasses RLS), otherwise use ANON_KEY
 // This ensures we can create users and login even if RLS is enabled
-const supabase = supabaseServiceKey
-  ? createClient(supabaseUrl, supabaseServiceKey, supabaseOptions)
-  : createClient(supabaseUrl, supabaseKey, supabaseOptions);
+let supabase;
+let supabaseAdmin = null;
 
-const supabaseAdmin = supabaseServiceKey
-  ? createClient(supabaseUrl, supabaseServiceKey, supabaseOptions)
-  : null;
+try {
+  if (supabaseServiceKey && supabaseUrl && supabaseUrl !== 'https://your-project.supabase.co' && supabaseServiceKey !== 'your-service-key') {
+    supabase = createClient(supabaseUrl, supabaseServiceKey, supabaseOptions);
+    supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, supabaseOptions);
+  } else if (supabaseKey && supabaseUrl && supabaseUrl !== 'https://your-project.supabase.co' && supabaseKey !== 'your-anon-key') {
+    supabase = createClient(supabaseUrl, supabaseKey, supabaseOptions);
+  } else {
+    // Fallback: إنشاء client فارغ لتجنب crash
+    console.warn('⚠️ Supabase credentials not configured properly, using fallback');
+    supabase = createClient('https://placeholder.supabase.co', 'placeholder-key', supabaseOptions);
+  }
+} catch (error) {
+  console.error('❌ خطأ في إنشاء Supabase client:', error);
+  // Fallback: إنشاء client فارغ لتجنب crash
+  supabase = createClient('https://placeholder.supabase.co', 'placeholder-key', supabaseOptions);
+}
 
 const DEFAULT_USER_EMAILS = [
   'bloom.company.ps@gmail.com',
@@ -1845,20 +1868,24 @@ app.get(/^(?!\/api).*/, (req, res) => {
 });
 
 // بدء الخادم بعد تهيئة Supabase (مع معالجة أخطاء أفضل)
-initSupabase()
-  .then(() => verifySupabaseSeed())
-  .then(() => {
-    // التحقق النهائي من وجود المستخدمين
-    return verifyUsersExist();
-  })
-  .catch(error => {
-    console.error('❌ فشل في تهيئة Supabase:', error);
-    // لا نوقف التطبيق، نستمر في العمل حتى لو فشلت التهيئة
-    console.warn('⚠️ التطبيق سيعمل بدون البيانات الافتراضية');
-  })
-  .finally(() => {
-    // Vercel doesn't need app.listen - it handles the server
-    if (!process.env.VERCEL) {
+// تأخير initSupabase حتى لا يسبب crash عند بدء التشغيل على Vercel
+if (!process.env.VERCEL) {
+  // فقط في البيئة المحلية، نستدعي initSupabase
+  initSupabase()
+    .then(() => verifySupabaseSeed())
+    .then(() => {
+      // التحقق النهائي من وجود المستخدمين
+      return verifyUsersExist();
+    })
+    .catch(error => {
+      console.error('❌ فشل في تهيئة Supabase:', error);
+      // لا نوقف التطبيق، نستمر في العمل حتى لو فشلت التهيئة
+      console.warn('⚠️ التطبيق سيعمل بدون البيانات الافتراضية');
+    });
+}
+
+// Vercel doesn't need app.listen - it handles the server
+if (!process.env.VERCEL) {
       app.listen(PORT, () => {
         console.log('✅ Connected to Supabase database');
         console.log('');
@@ -1888,10 +1915,6 @@ initSupabase()
         console.log('');
         console.log('✅ Site ready for local use with Supabase!');
       });
-    } else {
-      console.log('✅ Connected to Supabase database');
-      console.log('🚀 Application ready for Vercel deployment');
-    }
-  });
+}
 
 module.exports = app;
