@@ -266,6 +266,12 @@ const supabaseUrl = process.env.SUPABASE_URL || 'https://your-project.supabase.c
 const supabaseKey = process.env.SUPABASE_ANON_KEY || 'your-anon-key';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || null;
 
+// Validate Supabase configuration
+if (!supabaseUrl || supabaseUrl === 'https://your-project.supabase.co' || !supabaseKey || supabaseKey === 'your-anon-key') {
+  console.error('❌ خطأ: SUPABASE_URL و SUPABASE_ANON_KEY مطلوبان في Environment Variables');
+  console.error('   يرجى إضافة هذه المتغيرات في Vercel Dashboard → Settings → Environment Variables');
+}
+
 const supabaseOptions = {
   auth: {
     autoRefreshToken: false,
@@ -571,6 +577,7 @@ async function initSupabase() {
     // إنشاء المستخدمين الافتراضيين
     const defaultUsers = [
       {
+        user_number: '00001', // رقم المستخدم الأول
         name: 'روزان طميزي',
         email: 'bloom.company.ps@gmail.com',
         password: await bcrypt.hash('Admin123!@#', 10),
@@ -580,6 +587,7 @@ async function initSupabase() {
         is_active: true
       },
       {
+        user_number: '00002', // رقم المستخدم الثاني
         name: 'سارة أحمد',
         email: 'manager@bloom.com',
         password: await bcrypt.hash('Manager123!', 10),
@@ -589,6 +597,7 @@ async function initSupabase() {
         is_active: true
       },
       {
+        user_number: '00003', // رقم المستخدم الثالث
         name: 'محمد علي',
         email: 'user@bloom.com',
         password: await bcrypt.hash('User123!', 10),
@@ -804,12 +813,25 @@ async function verifyUsersExist() {
 
 // Routes
 app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    database: 'Supabase Connected', 
-    timestamp: new Date().toISOString(),
-    supabase: 'Active'
-  });
+  try {
+    res.json({ 
+      status: 'OK', 
+      database: supabaseUrl && supabaseUrl !== 'https://your-project.supabase.co' ? 'Supabase Connected' : 'Supabase Not Configured',
+      timestamp: new Date().toISOString(),
+      supabase: {
+        url: supabaseUrl && supabaseUrl !== 'https://your-project.supabase.co' ? 'Configured' : 'Not Configured',
+        key: supabaseKey && supabaseKey !== 'your-anon-key' ? 'Configured' : 'Not Configured',
+        serviceKey: supabaseServiceKey ? 'Configured' : 'Not Configured'
+      },
+      vercel: !!process.env.VERCEL,
+      nodeEnv: process.env.NODE_ENV || 'development'
+    });
+  } catch (e) {
+    res.status(500).json({ 
+      status: 'ERROR', 
+      error: e.message 
+    });
+  }
 });
 
 // تسجيل الدخول (بدون مصادقة ثنائية)
@@ -981,6 +1003,7 @@ app.post('/api/login', async (req, res) => {
       token,
       user: {
         id: users.id,
+        user_number: users.user_number || 'N/A', // رقم المستخدم الفريد
         name: users.name,
         email: users.email,
         role: users.role,
@@ -1165,6 +1188,7 @@ app.post('/api/register', async (req, res) => {
       message: 'تم إنشاء الحساب بنجاح',
       user: {
         id: userData.id,
+        user_number: userData.user_number || 'N/A', // رقم المستخدم الفريد
         name: userData.name,
         email: userData.email,
         role: userData.role,
@@ -1702,6 +1726,7 @@ app.put('/api/profile', async (req, res) => {
       message: 'تم تحديث معلوماتك الشخصية بنجاح',
       user: {
         id: updatedUser.id,
+        user_number: updatedUser.user_number || 'N/A', // رقم المستخدم الفريد
         name: updatedUser.name,
         email: updatedUser.email,
         role: updatedUser.role,
@@ -1794,7 +1819,32 @@ app.put('/api/change-password', async (req, res) => {
   }
 });
 
-// بدء الخادم بعد تهيئة Supabase
+// Serve index.html for all non-API routes (SPA fallback) - يجب أن يكون قبل initSupabase
+app.get(/^(?!\/api).*/, (req, res) => {
+  try {
+    const indexPath = path.join(__dirname, 'public', 'index.html');
+    // التحقق من وجود الملف
+    if (fs.existsSync(indexPath)) {
+      res.sendFile(indexPath);
+    } else {
+      console.error('❌ ملف index.html غير موجود في:', indexPath);
+      res.status(404).json({ 
+        error: 'Page not found',
+        message: 'index.html file not found',
+        path: indexPath
+      });
+    }
+  } catch (e) {
+    console.error('❌ خطأ في تحميل index.html:', e);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: e.message,
+      stack: process.env.NODE_ENV === 'development' ? e.stack : undefined
+    });
+  }
+});
+
+// بدء الخادم بعد تهيئة Supabase (مع معالجة أخطاء أفضل)
 initSupabase()
   .then(() => verifySupabaseSeed())
   .then(() => {
@@ -1803,6 +1853,8 @@ initSupabase()
   })
   .catch(error => {
     console.error('❌ فشل في تهيئة Supabase:', error);
+    // لا نوقف التطبيق، نستمر في العمل حتى لو فشلت التهيئة
+    console.warn('⚠️ التطبيق سيعمل بدون البيانات الافتراضية');
   })
   .finally(() => {
     // Vercel doesn't need app.listen - it handles the server
@@ -1841,15 +1893,5 @@ initSupabase()
       console.log('🚀 Application ready for Vercel deployment');
     }
   });
-
-// Serve index.html for all non-API routes (SPA fallback) - يجب أن يكون في النهاية بعد جميع الـ routes
-app.get(/^(?!\/api).*/, (req, res) => {
-  try {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-  } catch (e) {
-    console.error('Error serving index.html:', e);
-    res.status(500).send('Error loading page');
-  }
-});
 
 module.exports = app;
