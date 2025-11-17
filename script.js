@@ -1757,7 +1757,7 @@ function showUserMenu() {
         <div class="user-menu">
             <div class="user-info">
                 <i class="fas fa-user-circle"></i>
-                <span>${currentUser.name}</span>
+                <span>${currentUser.name} ${currentUser.user_number ? `(${currentUser.user_number})` : ''}</span>
                 <i class="fas fa-chevron-down"></i>
             </div>
             <div class="menu-items">
@@ -3364,10 +3364,11 @@ function showProfile() {
             </div>
                         <div class="profile-details">
                             <h4>${currentUser.name}</h4>
+                            <p><strong>رقم المستخدم:</strong> ${currentUser.user_number || 'N/A'}</p>
                             <p><strong>البريد الإلكتروني:</strong> ${currentUser.email}</p>
-                            <p><strong>الهاتف:</strong> ${currentUser.phone}</p>
+                            <p><strong>الهاتف:</strong> ${currentUser.phone || 'غير محدد'}</p>
                             <p><strong>الدور:</strong> ${getUserRoleText(currentUser.role)}</p>
-                            <p><strong>تاريخ الإنشاء:</strong> ${new Date(currentUser.createdAt).toLocaleDateString('ar-SA')}</p>
+                            <p><strong>تاريخ الإنشاء:</strong> ${currentUser.createdAt ? new Date(currentUser.createdAt).toLocaleDateString('ar-SA') : 'غير محدد'}</p>
                             <p><strong>آخر تسجيل دخول:</strong> ${currentUser.lastLogin ? new Date(currentUser.lastLogin).toLocaleDateString('ar-SA') : 'لم يسجل دخول بعد'}</p>
             </div>
                     </div>
