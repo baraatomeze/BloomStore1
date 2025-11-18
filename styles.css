@@ -279,10 +279,13 @@ body {
         font-size: 1rem;
     }
     
-    .categories {
+    .categories-grid {
         grid-template-columns: 1fr;
         gap: 1.5rem;
-        padding: 0;
+    }
+    
+    .categories {
+        padding: 2rem 0;
     }
     
     .category-card {
@@ -553,11 +556,15 @@ body {
 
 /* Categories Section */
 .categories {
+    padding: 4rem 0;
+    background: #ffffff;
+}
+
+.categories-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
     gap: 2rem;
-    margin-bottom: 4rem;
-    padding: 0 1rem;
+    margin-top: 2rem;
 }
 
 .section-title {
@@ -650,10 +657,15 @@ body {
 
 /* Products Section */
 .products {
+    padding: 4rem 0;
+    background: #f8f9fa;
+}
+
+.products-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 2rem;
-    margin-bottom: 3rem;
+    margin-top: 2rem;
 }
 
 .product-card {
@@ -970,7 +982,29 @@ body {
     gap: 1rem;
 }
 
-/* About Us Section */
+/* About Section */
+.about {
+    padding: 4rem 0;
+    background: #ffffff;
+}
+
+.about-content {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.about-text {
+    text-align: center;
+}
+
+.about-text p {
+    color: #666;
+    line-height: 1.8;
+    font-size: 1.1rem;
+    margin-bottom: 1.5rem;
+}
+
+/* About Us Section (for admin panel) */
 .about-us {
     background: white;
     border-radius: 15px;
@@ -1008,6 +1042,12 @@ body {
     font-size: 1.1rem;
     margin-bottom: 2rem;
     font-family: 'Ahaleel', 'Playfair Display', 'Cairo', serif;
+}
+
+/* Contact Section */
+.contact {
+    padding: 4rem 0;
+    background: #f8f9fa;
 }
 
 .contact-info {
@@ -1061,11 +1101,11 @@ body {
         gap: 0.5rem;
     }
     
-    .categories {
+    .categories-grid {
         grid-template-columns: 1fr;
     }
     
-    .products {
+    .products-grid {
         grid-template-columns: 1fr;
     }
     
@@ -1077,9 +1117,41 @@ body {
         grid-template-columns: 1fr;
 }
 
-.contact-info {
+    .contact-info {
         grid-template-columns: 1fr;
     }
+    
+    .about {
+        padding: 2rem 0;
+    }
+    
+    .contact {
+        padding: 2rem 0;
+    }
+    
+    .products {
+        padding: 2rem 0;
+    }
+}
+
+/* Footer Section */
+.footer {
+    background: #054334;
+    color: white;
+    padding: 2rem 0;
+    text-align: center;
+    margin-top: 4rem;
+}
+
+.footer-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+.footer-main p {
+    margin: 0.5rem 0;
+    color: rgba(255, 255, 255, 0.9);
 }
 
 /* Loading Animation */
