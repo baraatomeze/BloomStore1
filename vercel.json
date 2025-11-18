@@ -1,8 +1,15 @@
 {
   "version": 2,
+  "builds": [
+    {
+      "src": "server-supabase.js",
+      "use": "@vercel/node"
+    }
+  ],
   "routes": [
     { "src": "/api/(.*)", "dest": "/server-supabase.js" },
     { "src": "/uploads/(.*)", "dest": "/server-supabase.js" },
+    { "src": "/(.*\\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot))", "dest": "/public/$1" },
     { "src": "/(.*)", "dest": "/server-supabase.js" }
   ]
 }
