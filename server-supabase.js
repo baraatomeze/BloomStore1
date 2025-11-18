@@ -1271,10 +1271,11 @@ app.get('/api/products', async (req, res) => {
     
     if (error) {
       console.error('Products error:', error);
-      return res.status(500).json({ success: false, error: 'SERVER_ERROR' });
+      return res.status(500).json({ success: false, error: 'SERVER_ERROR', products: [] });
     }
     
-    res.json(products);
+    // إرجاع الصيغة الصحيحة مع success و products
+    res.json({ success: true, products: products || [] });
   } catch (e) {
     console.error('Products error:', e);
     res.status(500).json({ success: false, error: 'SERVER_ERROR' });

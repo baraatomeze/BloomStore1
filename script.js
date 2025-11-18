@@ -281,15 +281,32 @@ async function loadProductsFromServer() {
     try {
         console.log('🔄 جاري تحميل المنتجات من الخادم...');
         const r = await fetch('/api/products');
-        const j = await r.json();
-        console.log('📦 استجابة الخادم:', j);
         
-        if (!j || !j.success || !Array.isArray(j.products)) {
-            console.warn('⚠️ صيغة الاستجابة غير متوقعة، سيتم استخدام بيانات افتراضية');
+        if (!r.ok) {
+            console.error('❌ خطأ في جلب المنتجات:', r.status, r.statusText);
             return loadDefaultProducts();
         }
         
-        products = (j.products || []).map(p => ({
+        const j = await r.json();
+        console.log('📦 استجابة الخادم:', j);
+        
+        // التحقق من صيغة الاستجابة (قد تكون array مباشرة أو object مع products)
+        let productsArray = [];
+        if (Array.isArray(j)) {
+            // إذا كانت الاستجابة array مباشرة
+            productsArray = j;
+        } else if (j && Array.isArray(j.products)) {
+            // إذا كانت الاستجابة object مع products
+            productsArray = j.products;
+        } else if (j && j.success && Array.isArray(j.products)) {
+            // إذا كانت الاستجابة object مع success و products
+            productsArray = j.products;
+        } else {
+            console.warn('⚠️ صيغة الاستجابة غير متوقعة:', j);
+            return loadDefaultProducts();
+        }
+        
+        products = productsArray.map(p => ({
             ...p,
             images: Array.isArray(p.images) ? p.images : []
         }));
@@ -3066,21 +3083,28 @@ function createProductCard(product) {
     const productImage = product.image && product.image !== 'null' && product.image !== null ? product.image : 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDQwMCAzMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjRjBGMEYwIi8+CjxwYXRoIGQ9Ik0xNzUgMTI1SDIyNVYxNzVIMTc1VjEyNVoiIGZpbGw9IiNDQ0NDQ0MiLz4KPHN2ZyB4PSIxNzUiIHk9IjEyNSIgd2lkdGg9IjUwIiBoZWlnaHQ9IjUwIiB2aWV3Qm94PSIwIDAgMjQgMjQiIGZpbGw9IiM5OTk5OTkiPgo8cGF0aCBkPSJNMTIgMkM2LjQ4IDIgMiA2LjQ4IDIgMTJTNi40OCAyMiAxMiAyMlMyMiAxNy41MiAyMiAxMlMxNy41MiAyIDEyIDJaTTEzIDE3SDExVjE1SDEzVjE3Wk0xMyAxM0gxMVY3SDEzVjEzWiIvPgo8L3N2Zz4KPC9zdmc+';
     
     const finalPrice = applyGlobalDiscountToPrice(product.price);
+    const productId = product.id || product._id || `product-${Date.now()}-${Math.random()}`;
+    const productName = product.name || 'منتج بدون اسم';
+    const productDesc = product.description || 'لا يوجد وصف';
+    const productStock = product.stock !== undefined ? product.stock : 0;
+    
     card.innerHTML = `
-        <img src="${productImage}" alt="${product.name}" class="product-image" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+        <img src="${productImage}" alt="${productName}" class="product-image" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
         <div class="product-placeholder" style="display:none; background:#f0f0f0; height:200px; display:flex; align-items:center; justify-content:center; color:#666;">
             <i class="fas fa-image" style="font-size:48px;"></i>
         </div>
-        <h3>${product.name}</h3>
-        <p>${product.description}</p>
-        <div class="price-container">
-            <div class="price">${finalPrice} شيكل</div>
-            ${finalPrice !== product.price ? `<div class="original-price">${product.price} شيكل</div>` : (product.originalPrice ? `<div class=\"original-price\">${product.originalPrice} شيكل</div>` : '')}
+        <div class="product-info">
+            <h3 class="product-title">${productName}</h3>
+            <p class="product-description">${productDesc}</p>
+            <div class="price-container">
+                <div class="price">${finalPrice.toFixed(2)} ₪</div>
+                ${finalPrice !== product.price ? `<div class="original-price">${product.price.toFixed(2)} ₪</div>` : (product.original_price ? `<div class="original-price">${product.original_price.toFixed(2)} ₪</div>` : '')}
+            </div>
+            <div class="stock">المتوفرة: ${productStock}</div>
+            <button class="add-to-cart-btn" onclick="addToCart('${productId}')">
+                إضافة إلى السلة
+            </button>
         </div>
-        <div class="stock">المتوفرة: ${product.stock}</div>
-        <button class="add-to-cart-btn" onclick="addToCart(${product.id})">
-            إضافة إلى السلة
-        </button>
     `;
     
     return card;

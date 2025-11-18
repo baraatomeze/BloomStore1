@@ -794,6 +794,26 @@ body {
     box-shadow: 0 5px 15px rgba(5, 67, 52, 0.3);
 }
 
+.add-to-cart-btn {
+    background: #054334;
+    color: white;
+    border: none;
+    padding: 0.8rem 1.5rem;
+    border-radius: 25px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 500;
+    width: 100%;
+    font-size: 0.9rem;
+    margin-top: 1rem;
+}
+
+.add-to-cart-btn:hover {
+    background: #8B4513;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(5, 67, 52, 0.3);
+}
+
 /* ترتيب الأزرار في النماذج */
 .form-actions {
     display: flex;
