@@ -30,12 +30,17 @@ body {
     min-height: 100vh;
     direction: rtl;
     padding-top: 72px; /* مساواة ارتفاع الهيدر الفعلي لإزالة الفراغ */
+    margin: 0;
+    overflow-x: hidden;
+    width: 100%;
 }
 
 .container {
     max-width: 1200px;
     margin: 0 auto;
     padding: 0 20px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 /* شريط التوصيل العلوي */
@@ -565,6 +570,25 @@ body {
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
     gap: 2rem;
     margin-top: 2rem;
+    width: 100%;
+}
+
+@media (min-width: 1200px) {
+    .categories-grid {
+        grid-template-columns: repeat(5, 1fr);
+    }
+}
+
+@media (min-width: 768px) and (max-width: 1199px) {
+    .categories-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (min-width: 480px) and (max-width: 767px) {
+    .categories-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
 }
 
 .section-title {
@@ -587,6 +611,12 @@ body {
     border: 3px solid transparent;
     position: relative;
     overflow: hidden;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
 }
 
 .category-card::before {
@@ -666,6 +696,25 @@ body {
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 2rem;
     margin-top: 2rem;
+    width: 100%;
+}
+
+@media (min-width: 1200px) {
+    .products-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+@media (min-width: 768px) and (max-width: 1199px) {
+    .products-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (min-width: 480px) and (max-width: 767px) {
+    .products-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
 }
 
 .product-card {
@@ -676,6 +725,10 @@ body {
     transition: all 0.3s ease;
     border: 2px solid transparent;
     position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
 }
 
 .product-card:hover {
@@ -694,6 +747,10 @@ body {
 .product-info {
     padding: 1.5rem;
     text-align: center;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
 }
 
 .product-title {
@@ -1055,6 +1112,13 @@ body {
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
     gap: 2rem;
     margin-top: 2rem;
+    width: 100%;
+}
+
+@media (min-width: 768px) {
+    .contact-info {
+        grid-template-columns: repeat(3, 1fr);
+    }
 }
 
 .contact-item {
