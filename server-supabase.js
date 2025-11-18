@@ -296,19 +296,49 @@ let supabase;
 let supabaseAdmin = null;
 
 try {
-  if (supabaseServiceKey && supabaseUrl && supabaseUrl !== 'https://your-project.supabase.co' && supabaseServiceKey !== 'your-service-key') {
+  // التحقق من صحة Environment Variables
+  const hasValidUrl = supabaseUrl && supabaseUrl !== 'https://your-project.supabase.co';
+  const hasValidAnonKey = supabaseKey && supabaseKey !== 'your-anon-key';
+  const hasValidServiceKey = supabaseServiceKey && supabaseServiceKey !== 'your-service-key';
+  
+  if (hasValidUrl && hasValidServiceKey) {
+    // استخدام SERVICE_ROLE_KEY إذا كان متوفراً
     supabase = createClient(supabaseUrl, supabaseServiceKey, supabaseOptions);
     supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, supabaseOptions);
-  } else if (supabaseKey && supabaseUrl && supabaseUrl !== 'https://your-project.supabase.co' && supabaseKey !== 'your-anon-key') {
+    console.log('✅ Supabase client initialized with SERVICE_ROLE_KEY');
+  } else if (hasValidUrl && hasValidAnonKey) {
+    // استخدام ANON_KEY
     supabase = createClient(supabaseUrl, supabaseKey, supabaseOptions);
+    console.log('✅ Supabase client initialized with ANON_KEY');
   } else {
-    // Fallback: إنشاء client فارغ لتجنب crash
-    console.warn('⚠️ Supabase credentials not configured properly, using fallback');
-    supabase = createClient('https://placeholder.supabase.co', 'placeholder-key', supabaseOptions);
+    // Fallback: إنشاء client مع قيم افتراضية لتجنب crash
+    console.warn('⚠️ Supabase credentials not configured properly');
+    console.warn('   URL:', supabaseUrl);
+    console.warn('   Has Anon Key:', !!hasValidAnonKey);
+    console.warn('   Has Service Key:', !!hasValidServiceKey);
+    // استخدام قيم صحيحة من Environment Variables حتى لو كانت افتراضية
+    if (hasValidUrl) {
+      supabase = createClient(supabaseUrl, supabaseKey || 'placeholder-key', supabaseOptions);
+    } else {
+      supabase = createClient('https://placeholder.supabase.co', 'placeholder-key', supabaseOptions);
+    }
   }
 } catch (error) {
   console.error('❌ خطأ في إنشاء Supabase client:', error);
   // Fallback: إنشاء client فارغ لتجنب crash
+  try {
+    supabase = createClient('https://placeholder.supabase.co', 'placeholder-key', supabaseOptions);
+  } catch (fallbackError) {
+    console.error('❌ فشل في إنشاء fallback client:', fallbackError);
+    // إذا فشل كل شيء، نستخدم null وسنتعامل معه في الكود
+    supabase = null;
+  }
+}
+
+// التأكد من أن supabase معرف دائماً
+if (!supabase) {
+  console.error('❌ خطأ خطير: فشل في تهيئة Supabase client');
+  // إنشاء client افتراضي لتجنب crash
   supabase = createClient('https://placeholder.supabase.co', 'placeholder-key', supabaseOptions);
 }
 
