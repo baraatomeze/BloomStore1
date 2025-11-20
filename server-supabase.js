@@ -280,7 +280,12 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || null;
 // Validate Supabase configuration
 if (!supabaseUrl || supabaseUrl === 'https://your-project.supabase.co' || !supabaseKey || supabaseKey === 'your-anon-key') {
   console.error('❌ خطأ: SUPABASE_URL و SUPABASE_ANON_KEY مطلوبان في Environment Variables');
-  console.error('   يرجى إضافة هذه المتغيرات في Vercel Dashboard → Settings → Environment Variables');
+  console.error('   يرجى إنشاء ملف .env في المجلد الرئيسي وإضافة:');
+  console.error('   SUPABASE_URL=https://your-project.supabase.co');
+  console.error('   SUPABASE_ANON_KEY=your-anon-key');
+  console.error('   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key');
+  console.error('   للحصول على المفاتيح: Supabase Dashboard → Settings → API');
+  console.error('   راجع ملف FIX_API_KEY_ERROR.md للتعليمات التفصيلية');
 }
 
 const supabaseOptions = {
@@ -312,10 +317,18 @@ try {
     console.log('✅ Supabase client initialized with ANON_KEY');
   } else {
     // Fallback: إنشاء client مع قيم افتراضية لتجنب crash
-    console.warn('⚠️ Supabase credentials not configured properly');
-    console.warn('   URL:', supabaseUrl);
-    console.warn('   Has Anon Key:', !!hasValidAnonKey);
-    console.warn('   Has Service Key:', !!hasValidServiceKey);
+    console.error('❌ Supabase credentials not configured properly!');
+    console.error('   URL:', supabaseUrl);
+    console.error('   Has Valid URL:', !!hasValidUrl);
+    console.error('   Has Valid Anon Key:', !!hasValidAnonKey);
+    console.error('   Has Valid Service Key:', !!hasValidServiceKey);
+    console.error('');
+    console.error('📋 خطوات الإصلاح:');
+    console.error('   1. أنشئ ملف .env في المجلد الرئيسي');
+    console.error('   2. أضف مفاتيح Supabase من: Supabase Dashboard → Settings → API');
+    console.error('   3. أعد تشغيل السيرفر');
+    console.error('   4. راجع ملف FIX_API_KEY_ERROR.md للتعليمات التفصيلية');
+    console.error('');
     // استخدام قيم صحيحة من Environment Variables حتى لو كانت افتراضية
     if (hasValidUrl) {
       supabase = createClient(supabaseUrl, supabaseKey || 'placeholder-key', supabaseOptions);
@@ -1873,9 +1886,24 @@ app.put('/api/change-password', async (req, res) => {
   }
 });
 
+// Serve static files first (CSS, JS, images) - يجب أن يكون قبل SPA fallback
+app.get(/\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/, (req, res, next) => {
+  const filePath = path.join(__dirname, 'public', req.path);
+  if (fs.existsSync(filePath)) {
+    res.sendFile(filePath);
+  } else {
+    next();
+  }
+});
+
 // Serve index.html for all non-API routes (SPA fallback) - يجب أن يكون قبل initSupabase
 app.get(/^(?!\/api).*/, (req, res) => {
   try {
+    // Skip if it's a static file request
+    if (/\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/.test(req.path)) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    
     const indexPath = path.join(__dirname, 'public', 'index.html');
     // التحقق من وجود الملف
     if (fs.existsSync(indexPath)) {
