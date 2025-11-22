@@ -40,14 +40,14 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.18.0",
     "multer": "^2.0.2",
-    "nodemailer": "^6.10.1",
+    "nodemailer": "^7.0.10",
     "sqlite3": "^5.1.7"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
   },
   "engines": {
-    "node": "22.x",
-    "npm": "10.x"
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
   }
 }

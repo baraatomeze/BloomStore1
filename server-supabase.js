@@ -351,8 +351,11 @@ try {
 // التأكد من أن supabase معرف دائماً
 if (!supabase) {
   console.error('❌ خطأ خطير: فشل في تهيئة Supabase client');
-  // إنشاء client افتراضي لتجنب crash
-  supabase = createClient('https://placeholder.supabase.co', 'placeholder-key', supabaseOptions);
+  // في Vercel، لا ننشئ client افتراضي لأنه قد يسبب مشاكل
+  // سنستخدم null وسنتعامل معه في الكود
+  if (!process.env.VERCEL) {
+    supabase = createClient('https://placeholder.supabase.co', 'placeholder-key', supabaseOptions);
+  }
 }
 
 const DEFAULT_USER_EMAILS = [
@@ -2348,18 +2351,24 @@ app.get('/api/admin/profits/monthly', async (req, res) => {
 // Route محدد للملفات الثابتة قبل express.static
 app.get(/\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/, (req, res, next) => {
   try {
-    const filePath = path.join(__dirname, 'public', req.path);
-    if (fs.existsSync(filePath)) {
-      res.sendFile(filePath);
-    } else {
-      // محاولة البحث في المجلد الجذر
-      const altPath = path.join(__dirname, req.path.replace(/^\//, ''));
-      if (fs.existsSync(altPath)) {
-        res.sendFile(altPath);
-      } else {
-        next(); // الانتقال إلى express.static
+    // محاولة مسارات متعددة لـ Vercel
+    const paths = [
+      path.join(__dirname, 'public', req.path),
+      path.join(process.cwd(), 'public', req.path),
+      path.join(__dirname, req.path.replace(/^\//, ''))
+    ];
+    
+    for (const filePath of paths) {
+      try {
+        if (fs.existsSync(filePath)) {
+          return res.sendFile(filePath);
+        }
+      } catch (e) {
+        // تجاهل الخطأ والمحاولة التالية
       }
     }
+    
+    next(); // الانتقال إلى express.static
   } catch (e) {
     console.error('Static file error:', e);
     next(); // الانتقال إلى express.static
@@ -2367,7 +2376,12 @@ app.get(/\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/, (req, res, ne
 });
 
 // استخدام express.static كـ fallback لخدمة الملفات الثابتة
-app.use(express.static(path.join(__dirname, 'public'), {
+// في Vercel، نستخدم process.cwd() بدلاً من __dirname
+const publicPath = process.env.VERCEL 
+  ? path.join(process.cwd(), 'public')
+  : path.join(__dirname, 'public');
+
+app.use(express.static(publicPath, {
   index: false, // لا نخدم index.html تلقائياً
   dotfiles: 'ignore'
 }));
@@ -2380,16 +2394,30 @@ app.get(/^(?!\/api).*/, (req, res) => {
       return res.status(404).json({ error: 'File not found' });
     }
     
+    // في Vercel، الملفات الثابتة تكون في نفس المجلد
     const indexPath = path.join(__dirname, 'public', 'index.html');
     // التحقق من وجود الملف
-    if (fs.existsSync(indexPath)) {
-      res.sendFile(indexPath);
-    } else {
-      console.error('❌ ملف index.html غير موجود في:', indexPath);
-      res.status(404).json({ 
-        error: 'Page not found',
-        message: 'index.html file not found',
-        path: indexPath
+    try {
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        // محاولة مسار بديل لـ Vercel
+        const altPath = path.join(process.cwd(), 'public', 'index.html');
+        if (fs.existsSync(altPath)) {
+          res.sendFile(altPath);
+        } else {
+          console.error('❌ ملف index.html غير موجود في:', indexPath);
+          res.status(404).json({ 
+            error: 'Page not found',
+            message: 'index.html file not found'
+          });
+        }
+      }
+    } catch (fileError) {
+      console.error('❌ خطأ في قراءة index.html:', fileError);
+      res.status(500).json({ 
+        error: 'Internal server error',
+        message: 'Failed to load index.html'
       });
     }
   } catch (e) {
