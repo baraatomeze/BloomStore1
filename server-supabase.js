@@ -632,7 +632,7 @@ async function initSupabase() {
         user_number: '00001', // رقم المستخدم الأول
         name: 'روزان طميزي',
         email: 'bloom.company.ps@gmail.com',
-        password: await bcrypt.hash('Admin123!@#', 10),
+        password: await bcrypt.hash('Bloom2024!@', 10),
         phone: '0566411202',
         address: 'فلسطين - غزة',
         role: 'admin',
@@ -2448,8 +2448,8 @@ if (!process.env.VERCEL) {
         console.log('🔐 Login credentials for users:');
         console.log('');
         console.log('   👑 Main Admin:');
-        console.log('      Email: bloom.company.ps@gmail.com');
-        console.log('      Password: Admin123!@#');
+      console.log('      Email: bloom.company.ps@gmail.com');
+      console.log('      Password: Bloom2024!@');
         console.log('');
         console.log('   👨‍💼 Sub Manager:');
         console.log('      Email: manager@bloom.com');

@@ -608,8 +608,9 @@ async function handleRegister(event) {
     
     // Validate password strength
     const passwordValidation = validatePassword(password);
-    if (!passwordValidation.valid) {
-        showMessage('كلمة المرور ضعيفة: يجب أن تحتوي على 8 أحرف على الأقل، أحرف صغيرة وكبيرة، أرقام، ورموز خاصة', 'error');
+    if (!passwordValidation || !passwordValidation.valid) {
+        const errorMsg = passwordValidation && passwordValidation.errors ? passwordValidation.errors.join(', ') : 'كلمة المرور ضعيفة: يجب أن تحتوي على 8 أحرف على الأقل، أحرف صغيرة وكبيرة، أرقام، ورموز خاصة';
+        showMessage(errorMsg, 'error');
         return;
     }
     
