@@ -146,13 +146,13 @@ section {
 
 /* تصميم الأزرار */
 .cart-btn {
-    background: rgba(255, 255, 255, 0.15);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.95);
+    border: 2px solid #ffffff;
     padding: 15px 18px;
-    color: #ffffff;
+    color: #054334;
     cursor: pointer;
     transition: all 0.4s ease;
-    font-size: 20px;
+    font-size: 22px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -161,18 +161,19 @@ section {
     position: relative;
     opacity: 1;
     visibility: visible;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    font-weight: 700;
 }
 
 .search-btn, .menu-btn {
-    background: rgba(255, 255, 255, 0.15);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.95);
+    border: 2px solid #ffffff;
     padding: 15px 18px;
-    color: #ffffff;
+    color: #054334;
     cursor: pointer;
     transition: all 0.4s ease;
-    font-size: 20px;
+    font-size: 22px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -181,20 +182,25 @@ section {
     position: relative;
     opacity: 1;
     visibility: visible;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    font-weight: 700;
 }
 
 .cart-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
-    transform: translateY(-2px) scale(1.05);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+    background: #ffffff;
+    border-color: #8B4513;
+    color: #8B4513;
+    transform: translateY(-3px) scale(1.08);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
 }
 
 .search-btn:hover, .menu-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
-    transform: translateY(-2px) scale(1.05);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+    background: #ffffff;
+    border-color: #8B4513;
+    color: #8B4513;
+    transform: translateY(-3px) scale(1.08);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
 }
 
 .cart-btn:active, .search-btn:active, .menu-btn:active {
@@ -202,31 +208,31 @@ section {
 }
 
 .cart-count {
-    background: #054334;
+    background: #dc3545;
     color: white;
     border-radius: 50%;
-    padding: 3px 7px;
-    font-size: 11px;
-    font-weight: bold;
-    min-width: 20px;
+    padding: 4px 8px;
+    font-size: 12px;
+    font-weight: 900;
+    min-width: 22px;
     text-align: center;
     margin-left: 5px;
     position: absolute;
-    top: -8px;
-    right: -8px;
-    box-shadow: 0 2px 8px rgba(255, 71, 87, 0.4);
-    border: 2px solid #ffffff;
+    top: -10px;
+    right: -10px;
+    box-shadow: 0 3px 10px rgba(220, 53, 69, 0.6);
+    border: 3px solid #ffffff;
 }
 
 /* زر تسجيل الدخول */
 .login-btn {
-    background: rgba(255, 255, 255, 0.15);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.95);
+    border: 2px solid #ffffff;
     padding: 15px 18px;
-    color: #ffffff;
+    color: #054334;
     cursor: pointer;
     transition: all 0.4s ease;
-    font-size: 20px;
+    font-size: 22px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -235,14 +241,17 @@ section {
     position: relative;
     opacity: 1;
     visibility: visible;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    font-weight: 700;
 }
 
 .login-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
-    transform: translateY(-2px) scale(1.05);
-    box-shadow: 0 5px 15px rgba(255, 255, 255, 0.2);
+    background: #ffffff;
+    border-color: #8B4513;
+    color: #8B4513;
+    transform: translateY(-3px) scale(1.08);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
 }
 
 .login-btn:active {
