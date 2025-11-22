@@ -1,0 +1,9 @@
+[phases.setup]
+nixPkgs = ["nodejs-20_x", "npm"]
+
+[phases.install]
+cmds = ["npm ci"]
+
+[start]
+cmd = "node server-supabase.js"
+
