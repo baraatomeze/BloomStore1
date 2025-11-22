@@ -19,13 +19,17 @@ async function loadAnnouncementPublic(){
     try{
         const r = await fetch('/api/announcement');
         const j = await r.json();
-        if (!j.success) return;
+        // قبول الاستجابة حتى لو كانت success: false
+        if (!j || !j.announcement) {
+            window.globalDiscount = { enabled: false, percent: 0 };
+            return;
+        }
         const a = j.announcement || {};
         // حفظ إعداد الخصم
-        window.globalDiscount = { enabled: !!a.applyDiscount, percent: Number(a.discountPercent)||0 };
+        window.globalDiscount = { enabled: !!(a.apply_discount || a.applyDiscount), percent: Number(a.discount_percent || a.discountPercent)||0 };
         // تحديث قسم الإعلان إن وُجد
         const section = document.getElementById('announcementSection');
-        if (section){ section.style.display = a.isVisible ? 'block' : 'none'; }
+        if (section){ section.style.display = (a.is_visible !== undefined ? a.is_visible : a.isVisible) ? 'block' : 'none'; }
         const img = document.getElementById('announcementImage');
         const title = document.getElementById('announcementTitle');
         const content = document.getElementById('announcementContent');
@@ -34,9 +38,10 @@ async function loadAnnouncementPublic(){
         if (title) title.textContent = a.title || '';
         if (content) content.textContent = a.content || '';
         if (discount){
-            if (a.applyDiscount && a.discountPercent>0){
+            if ((a.apply_discount || a.applyDiscount) && (a.discount_percent || a.discountPercent)>0){
                 discount.style.display='block';
-                discount.textContent = `خصم عام ${a.discountPercent}% على كل المنتجات`;
+                const discountValue = a.discount_percent || a.discountPercent;
+                discount.textContent = `خصم عام ${discountValue}% على كل المنتجات`;
             } else { discount.style.display='none'; }
         }
         // إعادة عرض المنتجات بأسعار الخصم إن كانت محملة

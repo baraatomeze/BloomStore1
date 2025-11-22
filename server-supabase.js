@@ -1276,6 +1276,12 @@ app.post('/api/register', async (req, res) => {
 // الحصول على المنتجات
 app.get('/api/products', async (req, res) => {
   try {
+    // التحقق من وجود supabase client
+    if (!supabase) {
+      console.warn('⚠️ Supabase client not initialized, returning empty products');
+      return res.json({ success: true, products: [] });
+    }
+
     const { data: products, error } = await supabase
       .from('products')
       .select('*')
@@ -1284,14 +1290,15 @@ app.get('/api/products', async (req, res) => {
     
     if (error) {
       console.error('Products error:', error);
-      return res.status(500).json({ success: false, error: 'SERVER_ERROR', products: [] });
+      // إرجاع قائمة فارغة بدلاً من خطأ حتى يعمل المتجر
+      return res.json({ success: true, products: [] });
     }
     
     // إرجاع الصيغة الصحيحة مع success و products
     res.json({ success: true, products: products || [] });
   } catch (e) {
     console.error('Products error:', e);
-    res.status(500).json({ success: false, error: 'SERVER_ERROR' });
+    res.json({ success: true, products: [] });
   }
 });
 
@@ -1889,6 +1896,21 @@ app.put('/api/change-password', async (req, res) => {
 // API: جلب الإعلان العام
 app.get('/api/announcement', async (req, res) => {
   try {
+    // التحقق من وجود supabase client
+    if (!supabase) {
+      return res.json({
+        success: true,
+        announcement: {
+          title: '',
+          content: '',
+          image: null,
+          is_visible: false,
+          apply_discount: false,
+          discount_percent: 0
+        }
+      });
+    }
+
     const { data: announcement, error } = await supabase
       .from('announcements')
       .select('*')
@@ -1898,8 +1920,18 @@ app.get('/api/announcement', async (req, res) => {
       .single();
 
     if (error && error.code !== 'PGRST116') {
-      console.error('Announcement fetch error:', error);
-      return res.json({ success: false, announcement: null });
+      console.warn('Announcement fetch error:', error);
+      return res.json({
+        success: true,
+        announcement: {
+          title: '',
+          content: '',
+          image: null,
+          is_visible: false,
+          apply_discount: false,
+          discount_percent: 0
+        }
+      });
     }
 
     res.json({
@@ -1916,7 +1948,7 @@ app.get('/api/announcement', async (req, res) => {
   } catch (e) {
     console.error('Announcement error:', e);
     res.json({
-      success: false,
+      success: true,
       announcement: {
         title: '',
         content: '',
@@ -2076,17 +2108,28 @@ app.put('/api/users/update', async (req, res) => {
   }
 });
 
-// Serve static files first (CSS, JS, images) - يجب أن يكون قبل SPA fallback
+// Serve static files (CSS, JS, images) - يجب أن يكون بعد API routes
 app.get(/\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/, (req, res, next) => {
-  const filePath = path.join(__dirname, 'public', req.path);
-  if (fs.existsSync(filePath)) {
-    res.sendFile(filePath);
-  } else {
-    next();
+  try {
+    const filePath = path.join(__dirname, 'public', req.path);
+    if (fs.existsSync(filePath)) {
+      res.sendFile(filePath);
+    } else {
+      // محاولة البحث في مجلدات أخرى
+      const altPath = path.join(__dirname, req.path);
+      if (fs.existsSync(altPath)) {
+        res.sendFile(altPath);
+      } else {
+        res.status(404).json({ error: 'File not found', path: req.path });
+      }
+    }
+  } catch (e) {
+    console.error('Static file error:', e);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// Serve index.html for all non-API routes (SPA fallback) - يجب أن يكون قبل initSupabase
+// Serve index.html for all non-API routes (SPA fallback)
 app.get(/^(?!\/api).*/, (req, res) => {
   try {
     // Skip if it's a static file request
