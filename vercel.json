@@ -1,15 +1,31 @@
 {
   "version": 2,
+  "builds": [
+    {
+      "src": "server-supabase.js",
+      "use": "@vercel/node"
+    }
+  ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "/server-supabase.js" },
-    { "src": "/uploads/(.*)", "dest": "/server-supabase.js" },
-    { "src": "/styles.css", "dest": "/public/styles.css" },
-    { "src": "/script.js", "dest": "/public/script.js" },
-    { "src": "/config.js", "dest": "/public/config.js" },
-    { "src": "/admin-functions.js", "dest": "/public/admin-functions.js" },
-    { "src": "/(.*\\.(png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot))", "dest": "/public/$1" },
-    { "src": "/images/(.*)", "dest": "/public/images/$1" },
-    { "src": "/(.*)", "dest": "/server-supabase.js" }
+    {
+      "src": "/api/(.*)",
+      "dest": "/server-supabase.js"
+    },
+    {
+      "src": "/uploads/(.*)",
+      "dest": "/server-supabase.js"
+    },
+    {
+      "src": "/(.*\\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot))",
+      "dest": "/public/$1",
+      "headers": {
+        "Cache-Control": "public, max-age=31536000, immutable"
+      }
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/server-supabase.js"
+    }
   ]
 }
 

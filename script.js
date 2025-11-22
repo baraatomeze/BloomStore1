@@ -746,8 +746,11 @@ function validatePassword(password) {
     };
 }
 
-// تحديث دالة show2FAModal لتشمل خيارات متعددة للمصادقة الثنائية
+// تم إلغاء المصادقة الثنائية - تم حذف جميع الدوال المتعلقة بها
 function show2FAModal(user) {
+    // تم إلغاء المصادقة الثنائية - تسجيل الدخول مباشر
+    loginSuccess(user);
+    return;
     // التحقق من أن المستخدم مدير رئيسي
     if (user.role !== 'admin') {
         console.log('المصادقة الثنائية متاحة للمدير الرئيسي فقط');
@@ -1325,102 +1328,17 @@ function setupSecurityEventListeners() {
 }
 
 async function verify2FA() {
-    // التحقق من أن المستخدم مدير رئيسي
-    if (!currentUser || currentUser.role !== 'admin') {
-        console.log('المصادقة الثنائية متاحة للمدير الرئيسي فقط');
+    // تم إلغاء المصادقة الثنائية - تسجيل الدخول مباشر
+    if (currentUser) {
         loginSuccess(currentUser);
-        return;
     }
-    
-    const code = document.getElementById('twoFACode').value.trim();
-    
-    if (!code) {
-        showMessage('يرجى إدخال رمز OTP', 'error');
-        return;
-    }
-    
-    if (code.length !== 6) {
-        showMessage('رمز OTP يجب أن يكون 6 أرقام', 'error');
-        return;
-    }
-    
-    console.log('الكود المدخل:', code);
-    console.log('الكود المطلوب:', currentUser?.verificationCode);
-    console.log('الطريقة المختارة:', currentUser?.selected2FAMethod);
-    
-    // التحقق من الكود عبر الخادم
-    try {
-        const r = await fetch('/api/2fa/verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: 'bloom.company.ps@gmail.com', code })
-        });
-        const j = await r.json();
-        if (j && j.success) {
-            showMessage('تم التحقق بنجاح!', 'success');
-            close2FA();
-            loginSuccess(currentUser);
-            return;
-        }
-        showMessage('رمز المصادقة غير صحيح أو منتهي الصلاحية', 'error');
-        document.getElementById('twoFACode').value = '';
-        document.getElementById('twoFACode').focus();
-    } catch (e) {
-        showMessage('خطأ في التحقق من الكود. تحقق من الاتصال.', 'error');
-    }
-    
-    // في الإنتاج، سيتم إرسال طلب التحقق للخادم
-    // try {
-    //     // تحديد المعرف حسب الطريقة المختارة
-    //     let identifier;
-    //     if (currentUser.selected2FAMethod === 'email') {
-    //         identifier = 'baraatomeze@gmail.com';
-    //     } else if (currentUser.selected2FAMethod === 'sms') {
-    //         identifier = '0566411202';
-    //     } else {
-    //         // للتطبيق، نستخدم الكود المحلي
-    //         if (currentUser && currentUser.verificationCode && code === currentUser.verificationCode.toString()) {
-    //             showMessage('تم التحقق بنجاح!', 'success');
-    //             close2FA();
-    //             loginSuccess(currentUser);
-    //             return;
-    //         } else {
-    //             showMessage('رمز المصادقة غير صحيح، يرجى المحاولة مرة أخرى', 'error');
-    //             return;
-    //         }
-    //     }
-    //     
-    //     // إرسال طلب التحقق للخادم
-    //     const response = await fetch('/api/verify-code', {
-    //         method: 'POST',
-    //         headers: { 'Content-Type': 'application/json' },
-    //         body: JSON.stringify({ identifier, code })
-    //     });
-    //     
-    //     const result = await response.json();
-    //     
-    //     if (result.success) {
-    //         console.log('تم التحقق من الكود بنجاح');
-    //         showMessage('تم التحقق بنجاح!', 'success');
-    //         close2FA();
-    //         loginSuccess(currentUser);
-    //     } else {
-    //         console.log('كود التحقق غير صحيح:', result.error);
-    //         showMessage(`رمز المصادقة غير صحيح: ${result.error}`, 'error');
-    //     }
-    // } catch (error) {
-    //     console.error('Error verifying code:', error);
-    //     showMessage('خطأ في التحقق من الكود، يرجى المحاولة مرة أخرى', 'error');
-    // }
 }
 
 function close2FA() {
-    document.getElementById('twoFAModal').style.display = 'none';
-    document.getElementById('twoFACode').value = '';
+    // تم إلغاء المصادقة الثنائية
     if (currentUser) {
-        delete currentUser.verificationCode;
+        loginSuccess(currentUser);
     }
-    currentUser = null;
 }
 
 // دالة توليد كود تحقق عشوائي

@@ -21,7 +21,7 @@ const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 4000;
 
 // HTTPS Support - Trust proxy for Heroku and Hostinger
 app.set('trust proxy', 1);
@@ -1882,6 +1882,196 @@ app.put('/api/change-password', async (req, res) => {
     });
   } catch (e) {
     console.error('Password change error:', e);
+    res.status(500).json({ success: false, error: 'SERVER_ERROR' });
+  }
+});
+
+// API: جلب الإعلان العام
+app.get('/api/announcement', async (req, res) => {
+  try {
+    const { data: announcement, error } = await supabase
+      .from('announcements')
+      .select('*')
+      .eq('is_visible', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('Announcement fetch error:', error);
+      return res.json({ success: false, announcement: null });
+    }
+
+    res.json({
+      success: true,
+      announcement: announcement || {
+        title: '',
+        content: '',
+        image: null,
+        is_visible: false,
+        apply_discount: false,
+        discount_percent: 0
+      }
+    });
+  } catch (e) {
+    console.error('Announcement error:', e);
+    res.json({
+      success: false,
+      announcement: {
+        title: '',
+        content: '',
+        image: null,
+        is_visible: false,
+        apply_discount: false,
+        discount_percent: 0
+      }
+    });
+  }
+});
+
+// تم إلغاء المصادقة الثنائية - تم حذف API endpoints
+
+// API: إرسال رمز OTP عبر SMS
+app.post('/api/sms/send-code', async (req, res) => {
+  try {
+    const { phone } = req.body || {};
+    if (!phone) {
+      return res.status(400).json({ success: false, error: 'PHONE_REQUIRED' });
+    }
+
+    // توليد رمز OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 دقائق
+
+    // حفظ الرمز في الذاكرة
+    if (!global.smsOTPMap) {
+      global.smsOTPMap = new Map();
+    }
+    global.smsOTPMap.set(phone, { code: otp, expiresAt });
+
+    // إرسال SMS (يجب إضافة خدمة SMS)
+    console.log(`[SMS] OTP Code for ${phone}: ${otp}`);
+
+    res.json({
+      success: true,
+      message: 'SMS_SENT'
+    });
+  } catch (e) {
+    console.error('SMS send error:', e);
+    res.status(500).json({ success: false, error: 'SEND_ERROR' });
+  }
+});
+
+// API: إرسال رمز OTP عبر البريد الإلكتروني
+app.post('/api/email/send-code', async (req, res) => {
+  try {
+    const { email } = req.body || {};
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'EMAIL_REQUIRED' });
+    }
+
+    // توليد رمز OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 دقائق
+
+    // حفظ الرمز في الذاكرة
+    if (!global.emailOTPMap) {
+      global.emailOTPMap = new Map();
+    }
+    global.emailOTPMap.set(email, { code: otp, expiresAt });
+
+    // إرسال البريد الإلكتروني (يجب إضافة nodemailer configuration)
+    console.log(`[Email] OTP Code for ${email}: ${otp}`);
+
+    res.json({
+      success: true,
+      message: 'EMAIL_SENT'
+    });
+  } catch (e) {
+    console.error('Email send error:', e);
+    res.status(500).json({ success: false, error: 'SEND_ERROR' });
+  }
+});
+
+// API: تحديث معلومات المستخدم (للإدارة)
+app.put('/api/users/update', async (req, res) => {
+  try {
+    // التحقق من التوكن
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'TOKEN_REQUIRED' });
+    }
+
+    let userId, userRole;
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      userId = decoded.userId;
+      userRole = decoded.role;
+    } catch (e) {
+      return res.status(401).json({ success: false, error: 'INVALID_TOKEN' });
+    }
+
+    // فقط الأدمن يمكنه تحديث المستخدمين الآخرين
+    const { id, name, email, phone, role, is_active } = req.body || {};
+    
+    if (!id) {
+      return res.status(400).json({ success: false, error: 'USER_ID_REQUIRED' });
+    }
+
+    // الأدمن فقط يمكنه تحديث المستخدمين الآخرين
+    if (id !== userId && userRole !== 'admin') {
+      return res.status(403).json({ success: false, error: 'FORBIDDEN' });
+    }
+
+    // التحقق من وجود المستخدم
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (!existingUser) {
+      return res.status(404).json({ success: false, error: 'USER_NOT_FOUND' });
+    }
+
+    // تحديث معلومات المستخدم
+    const updateData = {
+      updated_at: new Date().toISOString()
+    };
+
+    if (name) updateData.name = name;
+    if (email) updateData.email = email;
+    if (phone) updateData.phone = phone;
+    if (role && userRole === 'admin') updateData.role = role;
+    if (typeof is_active === 'boolean' && userRole === 'admin') updateData.is_active = is_active;
+
+    const { data: updatedUser, error } = await supabase
+      .from('users')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('User update error:', error);
+      return res.status(500).json({ success: false, error: 'SERVER_ERROR' });
+    }
+
+    res.json({
+      success: true,
+      message: 'تم تحديث معلومات المستخدم بنجاح',
+      user: {
+        id: updatedUser.id,
+        user_number: updatedUser.user_number || 'N/A',
+        name: updatedUser.name,
+        email: updatedUser.email,
+        role: updatedUser.role,
+        phone: updatedUser.phone,
+        is_active: updatedUser.is_active
+      }
+    });
+  } catch (e) {
+    console.error('User update error:', e);
     res.status(500).json({ success: false, error: 'SERVER_ERROR' });
   }
 });
