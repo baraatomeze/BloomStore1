@@ -306,6 +306,14 @@ async function loadProductsFromServer() {
         } else if (j && j.success && Array.isArray(j.products)) {
             // إذا كانت الاستجابة object مع success و products
             productsArray = j.products;
+        } else if (j && j.success === false) {
+            // حتى لو كانت success: false، نحاول استخدام products إذا كانت موجودة
+            if (Array.isArray(j.products)) {
+                productsArray = j.products;
+            } else {
+                console.warn('⚠️ صيغة الاستجابة غير متوقعة:', j);
+                return loadDefaultProducts();
+            }
         } else {
             console.warn('⚠️ صيغة الاستجابة غير متوقعة:', j);
             return loadDefaultProducts();
@@ -4617,7 +4625,7 @@ function loadDefaultProducts() {
         }
     ];
     console.log('✅ تم تحميل المنتجات الافتراضية:', products.length);
-    displayProducts();
+    displayProducts(products);
 }
 
 // دالة عرض التصنيفات
@@ -4645,6 +4653,17 @@ function showCategory(category) {
 // دالة الحصول على جميع المنتجات
 function getAllProducts() {
     return products;
+}
+
+// التأكد من أن loadDefaultProducts تستدعي displayProducts
+if (typeof loadDefaultProducts === 'function') {
+    const originalLoadDefaultProducts = loadDefaultProducts;
+    loadDefaultProducts = function() {
+        originalLoadDefaultProducts();
+        if (typeof displayProducts === 'function' && products && products.length > 0) {
+            displayProducts(products);
+        }
+    };
 }
 
 // Initialize app on page load

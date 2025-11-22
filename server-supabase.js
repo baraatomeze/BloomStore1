@@ -189,8 +189,8 @@ function suspiciousMiddleware(req, res, next) {
 // ضع الوسيط بعد تحليل الجسم وقبل تقديم الملفات الثابتة حتى يشمل كل الطلبات
 app.use(suspiciousMiddleware);
 
-// Serve static files
-app.use(express.static(path.join(__dirname, 'public')));
+// لا نضع express.static هنا لأنه قد يعترض على API routes
+// سيتم خدمة الملفات الثابتة في route منفصل بعد API routes
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Ensure uploads folder exists
@@ -1289,8 +1289,7 @@ app.get('/api/products', async (req, res) => {
       .order('created_at', { ascending: false });
     
     if (error) {
-      console.error('Products error:', error);
-      // إرجاع قائمة فارغة بدلاً من خطأ حتى يعمل المتجر
+      console.warn('Products error:', error);
       return res.json({ success: true, products: [] });
     }
     
@@ -1430,6 +1429,26 @@ app.put('/api/products/:id', async (req, res) => {
 // حذف منتج
 app.delete('/api/products/:id', async (req, res) => {
   try {
+    // التحقق من التوكن
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'TOKEN_REQUIRED' });
+    }
+
+    let userId, userRole;
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      userId = decoded.userId;
+      userRole = decoded.role;
+    } catch (e) {
+      return res.status(401).json({ success: false, error: 'INVALID_TOKEN' });
+    }
+
+    // فقط الأدمن والمدير يمكنهم حذف المنتجات
+    if (userRole !== 'admin' && userRole !== 'manager') {
+      return res.status(403).json({ success: false, error: 'FORBIDDEN' });
+    }
+
     const { error } = await supabase
       .from('products')
       .delete()
@@ -2108,26 +2127,250 @@ app.put('/api/users/update', async (req, res) => {
   }
 });
 
+// API: إدارة الإعلانات (Admin only)
+app.post('/api/admin/announcement', upload.single('image'), async (req, res) => {
+  try {
+    // التحقق من التوكن
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'TOKEN_REQUIRED' });
+    }
+
+    let userId, userRole;
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      userId = decoded.userId;
+      userRole = decoded.role;
+    } catch (e) {
+      return res.status(401).json({ success: false, error: 'INVALID_TOKEN' });
+    }
+
+    // فقط الأدمن يمكنه إدارة الإعلانات
+    if (userRole !== 'admin') {
+      return res.status(403).json({ success: false, error: 'FORBIDDEN' });
+    }
+
+    const { isVisible, title, content, discountPercent, applyDiscount } = req.body;
+    
+    // حذف الإعلانات القديمة
+    await supabase.from('announcements').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    
+    // إضافة الإعلان الجديد
+    const announcementData = {
+      is_visible: isVisible === '1' || isVisible === true,
+      title: title || '',
+      content: content || '',
+      discount_percent: parseFloat(discountPercent) || 0,
+      apply_discount: applyDiscount === '1' || applyDiscount === true
+    };
+
+    if (req.file) {
+      announcementData.image = `/uploads/announcements/${req.file.filename}`;
+    }
+
+    const { data: announcement, error } = await supabase
+      .from('announcements')
+      .insert([announcementData])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Announcement save error:', error);
+      return res.status(500).json({ success: false, error: 'SERVER_ERROR' });
+    }
+
+    res.json({ success: true, announcement });
+  } catch (e) {
+    console.error('Announcement save error:', e);
+    res.status(500).json({ success: false, error: 'SERVER_ERROR' });
+  }
+});
+
+// API: إحصائيات الأرباح (Admin only)
+app.get('/api/admin/profits', async (req, res) => {
+  try {
+    // التحقق من التوكن
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'TOKEN_REQUIRED' });
+    }
+
+    let userId, userRole;
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      userId = decoded.userId;
+      userRole = decoded.role;
+    } catch (e) {
+      return res.status(401).json({ success: false, error: 'INVALID_TOKEN' });
+    }
+
+    // فقط الأدمن يمكنه رؤية الأرباح
+    if (userRole !== 'admin') {
+      return res.status(403).json({ success: false, error: 'FORBIDDEN' });
+    }
+
+    const { data: orders, error: ordersError } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('status', 'delivered');
+
+    if (ordersError) {
+      console.error('Orders fetch error:', ordersError);
+      return res.json({
+        success: true,
+        totalRevenue: 0,
+        totalCost: 0,
+        totalProfit: 0,
+        profitMargin: 0,
+        productProfits: []
+      });
+    }
+
+    let totalRevenue = 0;
+    let totalCost = 0;
+    const productProfits = {};
+
+    orders?.forEach(order => {
+      totalRevenue += parseFloat(order.total) || 0;
+      const products = order.products || [];
+      products.forEach(item => {
+        const productId = item.id || item.productId;
+        const quantity = item.quantity || 1;
+        const price = parseFloat(item.price) || 0;
+        const cost = parseFloat(item.cost) || (price * 0.6); // افتراضي 60% تكلفة
+        
+        if (!productProfits[productId]) {
+          productProfits[productId] = {
+            productId,
+            name: item.name || 'منتج غير معروف',
+            revenue: 0,
+            cost: 0,
+            profit: 0,
+            quantity: 0
+          };
+        }
+        
+        productProfits[productId].revenue += price * quantity;
+        productProfits[productId].cost += cost * quantity;
+        productProfits[productId].profit += (price - cost) * quantity;
+        productProfits[productId].quantity += quantity;
+      });
+    });
+
+    Object.keys(productProfits).forEach(key => {
+      totalCost += productProfits[key].cost;
+    });
+
+    const totalProfit = totalRevenue - totalCost;
+    const profitMargin = totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100) : 0;
+
+    res.json({
+      success: true,
+      totalRevenue,
+      totalCost,
+      totalProfit,
+      profitMargin: parseFloat(profitMargin.toFixed(2)),
+      productProfits: Object.values(productProfits)
+    });
+  } catch (e) {
+    console.error('Profits error:', e);
+    res.status(500).json({ success: false, error: 'SERVER_ERROR' });
+  }
+});
+
+// API: إحصائيات الأرباح الشهرية (Admin only)
+app.get('/api/admin/profits/monthly', async (req, res) => {
+  try {
+    // التحقق من التوكن
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'TOKEN_REQUIRED' });
+    }
+
+    let userId, userRole;
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      userId = decoded.userId;
+      userRole = decoded.role;
+    } catch (e) {
+      return res.status(401).json({ success: false, error: 'INVALID_TOKEN' });
+    }
+
+    // فقط الأدمن يمكنه رؤية الأرباح
+    if (userRole !== 'admin') {
+      return res.status(403).json({ success: false, error: 'FORBIDDEN' });
+    }
+
+    const { data: orders, error: ordersError } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('status', 'delivered');
+
+    if (ordersError) {
+      return res.json({ success: true, monthly: [] });
+    }
+
+    const monthlyData = {};
+    
+    orders?.forEach(order => {
+      const date = new Date(order.created_at);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      
+      if (!monthlyData[monthKey]) {
+        monthlyData[monthKey] = {
+          month: monthKey,
+          revenue: 0,
+          cost: 0,
+          profit: 0
+        };
+      }
+      
+      const revenue = parseFloat(order.total) || 0;
+      const cost = revenue * 0.6; // افتراضي 60% تكلفة
+      const profit = revenue - cost;
+      
+      monthlyData[monthKey].revenue += revenue;
+      monthlyData[monthKey].cost += cost;
+      monthlyData[monthKey].profit += profit;
+    });
+
+    res.json({
+      success: true,
+      monthly: Object.values(monthlyData).sort((a, b) => a.month.localeCompare(b.month))
+    });
+  } catch (e) {
+    console.error('Monthly profits error:', e);
+    res.status(500).json({ success: false, error: 'SERVER_ERROR' });
+  }
+});
+
 // Serve static files (CSS, JS, images) - يجب أن يكون بعد API routes
+// Route محدد للملفات الثابتة قبل express.static
 app.get(/\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/, (req, res, next) => {
   try {
     const filePath = path.join(__dirname, 'public', req.path);
     if (fs.existsSync(filePath)) {
       res.sendFile(filePath);
     } else {
-      // محاولة البحث في مجلدات أخرى
-      const altPath = path.join(__dirname, req.path);
+      // محاولة البحث في المجلد الجذر
+      const altPath = path.join(__dirname, req.path.replace(/^\//, ''));
       if (fs.existsSync(altPath)) {
         res.sendFile(altPath);
       } else {
-        res.status(404).json({ error: 'File not found', path: req.path });
+        next(); // الانتقال إلى express.static
       }
     }
   } catch (e) {
     console.error('Static file error:', e);
-    res.status(500).json({ error: 'Internal server error' });
+    next(); // الانتقال إلى express.static
   }
 });
+
+// استخدام express.static كـ fallback لخدمة الملفات الثابتة
+app.use(express.static(path.join(__dirname, 'public'), {
+  index: false, // لا نخدم index.html تلقائياً
+  dotfiles: 'ignore'
+}));
 
 // Serve index.html for all non-API routes (SPA fallback)
 app.get(/^(?!\/api).*/, (req, res) => {
