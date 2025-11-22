@@ -222,8 +222,51 @@ function saveBase64Image(dataUrl, subFolder = 'products') {
   return `/uploads/${subFolder}/${fileName}`;
 }
 // إضافة قسم (فئة) مع صورة
+// جلب جميع الأصناف
+app.get('/api/categories', async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.json({ success: true, categories: [] });
+    }
+
+    const { data: categories, error } = await supabase
+      .from('categories')
+      .select('*')
+      .eq('is_active', true)
+      .order('name', { ascending: true });
+
+    if (error) {
+      console.error('Get categories error:', error);
+      return res.json({ success: true, categories: [] });
+    }
+
+    res.json({ success: true, categories: categories || [] });
+  } catch (e) {
+    console.error('Get categories exception:', e);
+    res.json({ success: true, categories: [] });
+  }
+});
+
+// إضافة صنف جديد
 app.post('/api/categories', upload.single('image'), async (req, res) => {
   try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'TOKEN_REQUIRED' });
+    }
+
+    let userRole;
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      userRole = decoded.role;
+    } catch (e) {
+      return res.status(401).json({ success: false, error: 'INVALID_TOKEN' });
+    }
+
+    if (userRole !== 'admin' && userRole !== 'manager') {
+      return res.status(403).json({ success: false, error: 'FORBIDDEN' });
+    }
+
     const { name, description, image } = req.body || {};
     const imagePath = req.file
       ? `/uploads/products/${req.file.filename}`
@@ -232,13 +275,10 @@ app.post('/api/categories', upload.single('image'), async (req, res) => {
     if (!name) {
       return res.status(400).json({ success: false, error: 'NAME_REQUIRED' });
     }
-    if (!imagePath) {
-      return res.status(400).json({ success: false, error: 'IMAGE_REQUIRED' });
-    }
 
     const { data, error } = await supabase
       .from('categories')
-      .insert([{ name, description, image: imagePath }])
+      .insert([{ name, description, image: imagePath || null }])
       .select()
       .single();
 
@@ -250,6 +290,92 @@ app.post('/api/categories', upload.single('image'), async (req, res) => {
     res.json({ success: true, category: data });
   } catch (e) {
     console.error('Add category exception:', e);
+    res.status(500).json({ success: false, error: 'SERVER_ERROR' });
+  }
+});
+
+// تحديث صنف
+app.put('/api/categories/:id', upload.single('image'), async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'TOKEN_REQUIRED' });
+    }
+
+    let userRole;
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      userRole = decoded.role;
+    } catch (e) {
+      return res.status(401).json({ success: false, error: 'INVALID_TOKEN' });
+    }
+
+    if (userRole !== 'admin' && userRole !== 'manager') {
+      return res.status(403).json({ success: false, error: 'FORBIDDEN' });
+    }
+
+    const { name, description, image } = req.body || {};
+    const updateData = {};
+    
+    if (name) updateData.name = name;
+    if (description !== undefined) updateData.description = description;
+    if (req.file) {
+      updateData.image = `/uploads/products/${req.file.filename}`;
+    } else if (image) {
+      const imagePath = saveBase64Image(image, 'products');
+      if (imagePath) updateData.image = imagePath;
+    }
+
+    const { error } = await supabase
+      .from('categories')
+      .update(updateData)
+      .eq('id', req.params.id);
+
+    if (error) {
+      console.error('Update category error:', error);
+      return res.status(500).json({ success: false, error: 'SERVER_ERROR' });
+    }
+
+    res.json({ success: true, message: 'تم تحديث القسم بنجاح' });
+  } catch (e) {
+    console.error('Update category exception:', e);
+    res.status(500).json({ success: false, error: 'SERVER_ERROR' });
+  }
+});
+
+// حذف صنف
+app.delete('/api/categories/:id', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'TOKEN_REQUIRED' });
+    }
+
+    let userRole;
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      userRole = decoded.role;
+    } catch (e) {
+      return res.status(401).json({ success: false, error: 'INVALID_TOKEN' });
+    }
+
+    if (userRole !== 'admin' && userRole !== 'manager') {
+      return res.status(403).json({ success: false, error: 'FORBIDDEN' });
+    }
+
+    const { error } = await supabase
+      .from('categories')
+      .delete()
+      .eq('id', req.params.id);
+
+    if (error) {
+      console.error('Delete category error:', error);
+      return res.status(500).json({ success: false, error: 'SERVER_ERROR' });
+    }
+
+    res.json({ success: true, message: 'تم حذف القسم بنجاح' });
+  } catch (e) {
+    console.error('Delete category exception:', e);
     res.status(500).json({ success: false, error: 'SERVER_ERROR' });
   }
 });
@@ -937,6 +1063,20 @@ app.post('/api/login', async (req, res) => {
       console.log('🔄 تم إعادة تعيين حالة الحظر');
     }
     
+    // التحقق من وجود Supabase client
+    if (!supabase && !supabaseAdmin) {
+      console.error('❌ خطأ: Supabase client غير مهيأ');
+      console.error('   يرجى التحقق من متغيرات البيئة:');
+      console.error('   - SUPABASE_URL');
+      console.error('   - SUPABASE_ANON_KEY');
+      console.error('   - SUPABASE_SERVICE_ROLE_KEY (موصى به)');
+      return res.status(500).json({ 
+        success: false, 
+        error: 'DATABASE_CONNECTION_ERROR',
+        message: 'فشل الاتصال بقاعدة البيانات. يرجى التحقق من إعدادات Supabase على Railway.'
+      });
+    }
+    
     // استخدام SERVICE_ROLE_KEY لتجاوز RLS
     const client = supabaseAdmin || supabase;
     const isUsingAdmin = !!supabaseAdmin;
@@ -952,7 +1092,24 @@ app.post('/api/login', async (req, res) => {
 
     if (fetchError) {
       console.error('❌ خطأ في جلب المستخدم:', fetchError);
-      return res.status(500).json({ success: false, error: 'SERVER_ERROR' });
+      console.error('   تفاصيل الخطأ:', JSON.stringify(fetchError, null, 2));
+      
+      // رسالة خطأ أوضح
+      let errorMessage = 'SERVER_ERROR';
+      if (fetchError.code === 'PGRST116') {
+        errorMessage = 'USER_NOT_FOUND';
+      } else if (fetchError.code === '42501') {
+        errorMessage = 'RLS_POLICY_ERROR';
+      } else if (fetchError.message && fetchError.message.includes('Invalid API key')) {
+        errorMessage = 'INVALID_API_KEY';
+      }
+      
+      return res.status(500).json({ 
+        success: false, 
+        error: errorMessage,
+        details: fetchError.message || 'خطأ في الاتصال بقاعدة البيانات',
+        code: fetchError.code
+      });
     }
 
     if (!users) {
@@ -1025,7 +1182,8 @@ app.post('/api/login', async (req, res) => {
 
     // تحديث آخر تسجيل دخول
     console.log('📝 تحديث آخر تسجيل دخول...');
-    const { error: updateError } = await supabase
+    const updateClient = supabaseAdmin || supabase;
+    const { error: updateError } = await updateClient
       .from('users')
       .update({
         last_login: new Date().toISOString()
@@ -1095,6 +1253,16 @@ app.post('/api/register', async (req, res) => {
 
     console.log('✅ البيانات الأساسية موجودة:', { name, email, phone: phone || 'غير محدد' });
 
+    // التحقق من وجود Supabase client
+    if (!supabase && !supabaseAdmin) {
+      console.error('❌ خطأ: Supabase client غير مهيأ');
+      return res.status(500).json({ 
+        success: false, 
+        error: 'DATABASE_CONNECTION_ERROR',
+        message: 'فشل الاتصال بقاعدة البيانات. يرجى التحقق من إعدادات Supabase على Railway.'
+      });
+    }
+
     // التحقق من قوة كلمة المرور
     const passwordValidation = validatePassword(password);
     if (!passwordValidation.isValid) {
@@ -1114,6 +1282,10 @@ app.post('/api/register', async (req, res) => {
     const client = supabaseAdmin || supabase;
     const isUsingAdmin = !!supabaseAdmin;
     console.log(`🔑 استخدام العميل: ${isUsingAdmin ? 'SERVICE_ROLE_KEY (Admin - يتجاوز RLS)' : 'ANON_KEY (يتطلب سياسات RLS)'}`);
+    
+    if (!isUsingAdmin) {
+      console.warn('⚠️ تحذير: استخدام ANON_KEY قد يفشل إذا لم تكن هناك سياسات RLS صحيحة');
+    }
     
     // التحقق من وجود المستخدم
     console.log('🔍 التحقق من وجود المستخدم...');

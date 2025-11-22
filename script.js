@@ -913,25 +913,9 @@ function sendVerificationCode(method) {
 
 // دالة إرسال كود عبر البريد الإلكتروني
 async function sendEmailCode(code) {
-    try {
-        const adminEmail = 'bloom.company.ps@gmail.com';
-        const r = await fetch('/api/2fa/send-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: adminEmail })
-        });
-        const j = await r.json();
-        if (j && j.success) {
-            const note = j.test ? ' (تمت الطباعة في Console بسبب عدم ضبط SMTP)' : '';
-            showMessage(`تم إرسال رمز OTP إلى ${adminEmail}${note}`, 'success');
-        } else {
-            showMessage('تعذر إرسال رمز OTP عبر البريد. استخدم الكود الظاهر في Console.', 'warning');
-            console.warn('2FA send-email error:', j);
-        }
-    } catch (e) {
-        showMessage('خطأ في إرسال رمز OTP. تحقق من الاتصال.', 'error');
-        console.error('2FA send-email exception:', e);
-    }
+    // تم إلغاء 2FA - هذه الدالة لم تعد مستخدمة
+    console.log('2FA تم إلغاؤه - لا حاجة لإرسال كود');
+    return { success: false };
 }
 
 // دالة إرسال كود عبر SMS (حقيقي)

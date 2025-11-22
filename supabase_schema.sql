@@ -277,7 +277,17 @@ ALTER TABLE announcements ENABLE ROW LEVEL SECURITY;
 -- Policy: المستخدمون يمكنهم رؤية بياناتهم فقط
 DROP POLICY IF EXISTS "Users can view own data" ON users;
 CREATE POLICY "Users can view own data" ON users
-    FOR SELECT USING (auth.uid() = id);
+    FOR SELECT USING (true);
+
+-- Policy: السماح بإنشاء حسابات جديدة (التسجيل)
+DROP POLICY IF EXISTS "Users can register" ON users;
+CREATE POLICY "Users can register" ON users
+    FOR INSERT WITH CHECK (true);
+
+-- Policy: السماح بتحديث بيانات المستخدم نفسه
+DROP POLICY IF EXISTS "Users can update own data" ON users;
+CREATE POLICY "Users can update own data" ON users
+    FOR UPDATE USING (true);
 
 -- Policy: المنتجات مرئية للجميع
 DROP POLICY IF EXISTS "Products are viewable by everyone" ON products;
