@@ -553,22 +553,24 @@ section {
 .cta-btn {
     background: #054334;
     color: white;
-    padding: 1rem 2.5rem;
-    border: none;
+    padding: 1.2rem 3rem;
+    border: 3px solid #054334;
     border-radius: 50px;
-    font-size: 1.1rem;
-    font-weight: 600;
+    font-size: 1.2rem;
+    font-weight: 800;
     cursor: pointer;
     transition: all 0.3s ease;
-    box-shadow: 0 5px 15px rgba(5, 67, 52, 0.3);
+    box-shadow: 0 6px 20px rgba(5, 67, 52, 0.4);
     text-transform: uppercase;
     letter-spacing: 1px;
 }
 
 .cta-btn:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 10px 25px rgba(5, 67, 52, 0.4);
-    background: linear-gradient(135deg, #8B4513, #8B0000);
+    transform: translateY(-5px);
+    box-shadow: 0 12px 30px rgba(5, 67, 52, 0.5);
+    background: #8B4513;
+    border-color: #8B4513;
+    font-weight: 900;
 }
 
 /* Categories Section */
@@ -845,14 +847,18 @@ section {
     background: #054334;
     color: white;
     border: none;
-    padding: 0.8rem 1.5rem;
+    padding: 1rem 1.5rem;
+    border: 2px solid #054334;
     border-radius: 25px;
     cursor: pointer;
     transition: all 0.3s ease;
-    font-weight: 500;
+    font-weight: 700;
     width: 100%;
-    font-size: 0.9rem;
+    font-size: 1rem;
     margin-top: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: 0 4px 15px rgba(5, 67, 52, 0.3);
 }
 
 .add-to-cart-btn:hover {
@@ -991,20 +997,25 @@ section {
     width: 100%;
     background: #054334;
     color: white;
-    padding: 15px;
-    border: none;
+    padding: 15px 20px;
+    border: 2px solid #054334;
     border-radius: 10px;
-    font-size: 16px;
-    font-weight: 600;
+    font-size: 18px;
+    font-weight: 700;
     cursor: pointer;
     transition: all 0.3s ease;
     margin-top: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: 0 4px 15px rgba(5, 67, 52, 0.3);
 }
 
 .submit-btn:hover {
     background: #043028;
+    border-color: #043028;
     transform: translateY(-3px);
-    box-shadow: 0 10px 20px rgba(5, 67, 52, 0.3);
+    box-shadow: 0 8px 25px rgba(5, 67, 52, 0.4);
+    font-weight: 800;
 }
 
 .submit-btn:active {
@@ -1020,17 +1031,23 @@ section {
 .btn-secondary {
     background: #6c757d;
     color: white;
-    padding: 12px 20px;
-    border: none;
-    border-radius: 8px;
+    padding: 12px 24px;
+    border: 2px solid #6c757d;
+    border-radius: 10px;
     cursor: pointer;
     transition: all 0.3s ease;
     flex: 1;
+    font-weight: 700;
+    font-size: 16px;
+    box-shadow: 0 4px 15px rgba(108, 117, 125, 0.3);
 }
 
 .btn-secondary:hover {
     background: #5a6268;
-    transform: translateY(-2px);
+    border-color: #5a6268;
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(108, 117, 125, 0.4);
+    font-weight: 800;
 }
 
 /* Cart Modal */

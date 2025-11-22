@@ -121,27 +121,10 @@ function isSuspiciousString(str) {
 function suspiciousMiddleware(req, res, next) {
   try {
     // استثناء مسارات API من الفحص المشدد (خاصة login/register)
-    const apiPaths = ['/api/login', '/api/register', '/api/send-email-code', '/api/verify-code'];
+    const apiPaths = ['/api/login', '/api/register', '/api/send-email-code', '/api/verify-code', '/api/email/send-code', '/api/sms/send-code'];
     if (apiPaths.some(p => req.originalUrl.startsWith(p))) {
-      // فحص خفيف فقط لمسارات API
-      const bodyStr = JSON.stringify(req.body || {});
-      // فقط منع الأنماط الخطيرة جداً في API
-      const dangerousPatterns = [
-        /<\s*script/i,
-        /javascript:/i,
-        /(union\s+all\s+select|union\s+select)/i,
-        /(select\s+.*\s+from)/i,
-        /insert\s+into|update\s+.*\s+set|delete\s+from|drop\s+table|alter\s+table/i
-      ];
-      if (dangerousPatterns.some(rx => rx.test(bodyStr))) {
-        console.warn('🚫 نشاط مشبوه تم منعه في API:', { ip: req.ip, path: req.originalUrl });
-        return res.status(403).json({ 
-          success: false, 
-          error: 'SUSPICIOUS_ACTIVITY',
-          message: 'تم منع الطلب بسبب نشاط مشبوه'
-        });
-      }
-      return next(); // السماح بمسارات API
+      // السماح بجميع طلبات تسجيل الدخول والتسجيل بدون فحص
+      return next();
     }
     
     // فحص عادي للمسارات الأخرى
