@@ -265,7 +265,15 @@
                         </div>
                         <div class="form-group">
                             <label for="registerPassword">كلمة المرور</label>
-                            <input type="password" id="registerPassword" required>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <input type="password" id="registerPassword" required style="flex: 1;">
+                                <button type="button" onclick="generateStrongPassword()" class="btn-generate-password" title="توليد كلمة سر قوية">
+                                    <i class="fas fa-key"></i> توليد
+                                </button>
+                            </div>
+                            <small style="color: #666; font-size: 12px; margin-top: 5px; display: block;">
+                                يجب أن تكون 8 أحرف على الأقل وتحتوي على حروف كبيرة وصغيرة وأرقام ورموز خاصة
+                            </small>
                         </div>
                         <div class="form-group">
                             <label for="confirmPassword">تأكيد كلمة المرور</label>

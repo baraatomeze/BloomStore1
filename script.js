@@ -734,7 +734,7 @@ function incrementLoginAttempts(email) {
 // دالة التحقق من قوة كلمة المرور
 function validatePassword(password) {
     const requirements = {
-        length: password.length >= 8,
+        length: password.length >= 8, // الطول الكلي 8 أحرف على الأقل
         lowercase: /[a-z]/.test(password),
         uppercase: /[A-Z]/.test(password),
         number: /\d/.test(password),
@@ -758,6 +758,55 @@ function validatePassword(password) {
         message: 'كلمة المرور ضعيفة',
         requirements: requirements
     };
+}
+
+// دالة توليد كلمة سر قوية
+function generateStrongPassword() {
+    const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+    const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const numbers = '0123456789';
+    const special = '!@#$%^&*';
+    const allChars = lowercase + uppercase + numbers + special;
+    
+    // ضمان وجود حرف من كل نوع
+    let password = '';
+    password += lowercase[Math.floor(Math.random() * lowercase.length)];
+    password += uppercase[Math.floor(Math.random() * uppercase.length)];
+    password += numbers[Math.floor(Math.random() * numbers.length)];
+    password += special[Math.floor(Math.random() * special.length)];
+    
+    // إكمال باقي الأحرف (8 أحرف إجمالي)
+    for (let i = password.length; i < 8; i++) {
+        password += allChars[Math.floor(Math.random() * allChars.length)];
+    }
+    
+    // خلط الأحرف عشوائياً
+    password = password.split('').sort(() => Math.random() - 0.5).join('');
+    
+    // تعبئة الحقول
+    const passwordInput = document.getElementById('registerPassword');
+    const confirmInput = document.getElementById('confirmPassword');
+    
+    if (passwordInput) {
+        passwordInput.value = password;
+        passwordInput.type = 'text'; // إظهار كلمة المرور مؤقتاً
+        setTimeout(() => {
+            passwordInput.type = 'password'; // إخفاؤها بعد ثانيتين
+        }, 2000);
+    }
+    
+    if (confirmInput) {
+        confirmInput.value = password;
+        confirmInput.type = 'text'; // إظهار كلمة المرور مؤقتاً
+        setTimeout(() => {
+            confirmInput.type = 'password'; // إخفاؤها بعد ثانيتين
+        }, 2000);
+    }
+    
+    // إظهار رسالة نجاح
+    showMessage('تم توليد كلمة سر قوية! يمكنك رؤيتها لمدة ثانيتين', 'success');
+    
+    return password;
 }
 
 // تم إلغاء المصادقة الثنائية - تم حذف جميع الدوال المتعلقة بها

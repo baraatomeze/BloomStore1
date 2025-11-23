@@ -706,8 +706,9 @@ function validatePassword(password) {
   // التحقق من عدم وجود معلومات شخصية شائعة
   const commonPatterns = [
     /123456/, /password/, /qwerty/, /abc123/, /admin/, /user/,
-    /[0-9]{4,}/, // أرقام متتالية
-    /(.)\1{2,}/  // تكرار نفس الحرف 3 مرات أو أكثر
+    /(0123|1234|2345|3456|4567|5678|6789|9876|8765|7654|6543|5432|4321|3210)/, // أرقام متتالية شائعة فقط
+    /(0000|1111|2222|3333|4444|5555|6666|7777|8888|9999)/, // تكرار نفس الرقم 4 مرات
+    /(.)\1{3,}/  // تكرار نفس الحرف 4 مرات أو أكثر (أكثر صرامة)
   ];
   
   for (const pattern of commonPatterns) {
@@ -1096,19 +1097,30 @@ app.post('/api/login', async (req, res) => {
       
       // رسالة خطأ أوضح
       let errorMessage = 'SERVER_ERROR';
+      let statusCode = 500;
+      
       if (fetchError.code === 'PGRST116') {
         errorMessage = 'USER_NOT_FOUND';
+        statusCode = 404;
       } else if (fetchError.code === '42501') {
         errorMessage = 'RLS_POLICY_ERROR';
-      } else if (fetchError.message && fetchError.message.includes('Invalid API key')) {
+        statusCode = 500;
+      } else if (fetchError.message && (fetchError.message.includes('Invalid API key') || fetchError.message.includes('JWT'))) {
         errorMessage = 'INVALID_API_KEY';
+        statusCode = 500;
+        console.error('❌ خطأ: مفاتيح Supabase غير صحيحة!');
+        console.error('   يرجى التحقق من متغيرات البيئة على Railway:');
+        console.error('   - SUPABASE_URL');
+        console.error('   - SUPABASE_ANON_KEY');
+        console.error('   - SUPABASE_SERVICE_ROLE_KEY');
       }
       
-      return res.status(500).json({ 
+      return res.status(statusCode).json({ 
         success: false, 
         error: errorMessage,
         details: fetchError.message || 'خطأ في الاتصال بقاعدة البيانات',
-        code: fetchError.code
+        code: fetchError.code,
+        hint: errorMessage === 'INVALID_API_KEY' ? 'يرجى التحقق من مفاتيح Supabase على Railway' : undefined
       });
     }
 
@@ -1480,7 +1492,7 @@ app.get('/api/products/:id', async (req, res) => {
 });
 
 // إضافة منتج جديد (للأدمن فقط)
-app.post('/api/products', async (req, res) => {
+app.post('/api/products', upload.single('image'), async (req, res) => {
   try {
     const { name, description, price, originalPrice, category, image, stock } = req.body || {};
 
@@ -1489,7 +1501,13 @@ app.post('/api/products', async (req, res) => {
     }
 
     let storedImagePath = null;
-    if (image) {
+    
+    // أولوية للملف المرفوع (FormData)
+    if (req.file) {
+      storedImagePath = `/uploads/products/${req.file.filename}`;
+    } 
+    // ثم base64 string من req.body
+    else if (image) {
       if (typeof image === 'string' && image.startsWith('data:image')) {
         storedImagePath = saveBase64Image(image, 'products');
       } else if (typeof image === 'string') {
@@ -1535,7 +1553,7 @@ app.post('/api/products', async (req, res) => {
 });
 
 // تحديث منتج
-app.put('/api/products/:id', async (req, res) => {
+app.put('/api/products/:id', upload.single('image'), async (req, res) => {
   try {
     const { name, description, price, originalPrice, category, image, stock } = req.body || {};
 
@@ -1549,7 +1567,12 @@ app.put('/api/products/:id', async (req, res) => {
       updated_at: new Date().toISOString()
     };
 
-    if (image) {
+    // أولوية للملف المرفوع (FormData)
+    if (req.file) {
+      updateData.image = `/uploads/products/${req.file.filename}`;
+    }
+    // ثم base64 string من req.body
+    else if (image) {
       if (typeof image === 'string' && image.startsWith('data:image')) {
         updateData.image = saveBase64Image(image, 'products');
       } else if (typeof image === 'string') {

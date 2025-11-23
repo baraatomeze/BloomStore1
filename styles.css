@@ -1031,6 +1031,39 @@ section {
     transform: translateY(-1px);
 }
 
+/* زر توليد كلمة المرور */
+.btn-generate-password {
+    background: linear-gradient(135deg, #054334 0%, #065A42 100%);
+    color: #ffffff;
+    border: 2px solid #054334;
+    padding: 12px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 700;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 2px 8px rgba(5, 67, 52, 0.3);
+}
+
+.btn-generate-password:hover {
+    background: linear-gradient(135deg, #043028 0%, #054334 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(5, 67, 52, 0.4);
+}
+
+.btn-generate-password:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(5, 67, 52, 0.3);
+}
+
+.btn-generate-password i {
+    font-size: 14px;
+}
+
 .form-actions {
     display: flex;
     gap: 10px;
