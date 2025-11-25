@@ -1084,16 +1084,36 @@ app.post('/api/login', async (req, res) => {
     console.log(`🔑 استخدام العميل: ${isUsingAdmin ? 'SERVICE_ROLE_KEY (Admin)' : 'ANON_KEY'}`);
     
     console.log('🔍 البحث عن المستخدم في قاعدة البيانات...');
-    const { data: users, error: fetchError } = await client
+    
+    // محاولة أولى: البحث مع is_active = true
+    let { data: users, error: fetchError } = await client
       .from('users')
       .select('*')
       .eq('email', email)
       .eq('is_active', true)
       .maybeSingle();
 
+    // إذا لم نجد المستخدم وكان هناك خطأ متعلق بـ RLS أو API key، نجرب بدون is_active
+    if (fetchError && (fetchError.code === '42501' || fetchError.message?.includes('Invalid API key') || fetchError.message?.includes('JWT'))) {
+      console.warn('⚠️ محاولة ثانية: البحث بدون فلتر is_active...');
+      const retryResult = await client
+        .from('users')
+        .select('*')
+        .eq('email', email)
+        .maybeSingle();
+      
+      if (!retryResult.error) {
+        users = retryResult.data;
+        fetchError = null;
+        console.log('✅ تم العثور على المستخدم في المحاولة الثانية');
+      }
+    }
+
     if (fetchError) {
       console.error('❌ خطأ في جلب المستخدم:', fetchError);
       console.error('   تفاصيل الخطأ:', JSON.stringify(fetchError, null, 2));
+      console.error('   الكود:', fetchError.code);
+      console.error('   الرسالة:', fetchError.message);
       
       // رسالة خطأ أوضح
       let errorMessage = 'SERVER_ERROR';
@@ -1102,10 +1122,12 @@ app.post('/api/login', async (req, res) => {
       if (fetchError.code === 'PGRST116') {
         errorMessage = 'USER_NOT_FOUND';
         statusCode = 404;
-      } else if (fetchError.code === '42501') {
+      } else if (fetchError.code === '42501' || fetchError.message?.includes('row-level security') || fetchError.message?.includes('policy')) {
         errorMessage = 'RLS_POLICY_ERROR';
         statusCode = 500;
-      } else if (fetchError.message && (fetchError.message.includes('Invalid API key') || fetchError.message.includes('JWT'))) {
+        console.error('❌ خطأ: مشكلة في سياسات RLS!');
+        console.error('   الحل: شغّل ملف supabase_schema.sql على Supabase SQL Editor');
+      } else if (fetchError.message && (fetchError.message.includes('Invalid API key') || fetchError.message.includes('JWT') || fetchError.message.includes('expired'))) {
         errorMessage = 'INVALID_API_KEY';
         statusCode = 500;
         console.error('❌ خطأ: مفاتيح Supabase غير صحيحة!');
@@ -1120,7 +1142,8 @@ app.post('/api/login', async (req, res) => {
         error: errorMessage,
         details: fetchError.message || 'خطأ في الاتصال بقاعدة البيانات',
         code: fetchError.code,
-        hint: errorMessage === 'INVALID_API_KEY' ? 'يرجى التحقق من مفاتيح Supabase على Railway' : undefined
+        hint: errorMessage === 'INVALID_API_KEY' ? 'يرجى التحقق من مفاتيح Supabase على Railway' : 
+              errorMessage === 'RLS_POLICY_ERROR' ? 'شغّل ملف supabase_schema.sql على Supabase SQL Editor' : undefined
       });
     }
 
@@ -1268,10 +1291,14 @@ app.post('/api/register', async (req, res) => {
     // التحقق من وجود Supabase client
     if (!supabase && !supabaseAdmin) {
       console.error('❌ خطأ: Supabase client غير مهيأ');
+      console.error('   SUPABASE_URL:', process.env.SUPABASE_URL || 'غير محدد');
+      console.error('   SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? 'موجود' : 'غير موجود');
+      console.error('   SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'موجود' : 'غير موجود');
       return res.status(500).json({ 
         success: false, 
         error: 'DATABASE_CONNECTION_ERROR',
-        message: 'فشل الاتصال بقاعدة البيانات. يرجى التحقق من إعدادات Supabase على Railway.'
+        message: 'فشل الاتصال بقاعدة البيانات. يرجى التحقق من إعدادات Supabase على Railway.',
+        hint: 'تأكد من إضافة SUPABASE_URL و SUPABASE_ANON_KEY و SUPABASE_SERVICE_ROLE_KEY في Railway Variables'
       });
     }
 
@@ -1309,17 +1336,33 @@ app.post('/api/register', async (req, res) => {
 
     if (existingUserError) {
       console.error('❌ خطأ في التحقق من المستخدم:', existingUserError);
+      console.error('   الكود:', existingUserError.code);
+      console.error('   الرسالة:', existingUserError.message);
+      
       // إذا كان الخطأ ليس "لا يوجد نتائج" (PGRST116)، نعيد الخطأ
       if (existingUserError.code !== 'PGRST116') {
         // إذا كان الخطأ متعلق بـ RLS، نعطي رسالة واضحة
-        if (existingUserError.code === '42501' || existingUserError.message?.includes('row-level security')) {
+        if (existingUserError.code === '42501' || existingUserError.message?.includes('row-level security') || existingUserError.message?.includes('policy')) {
           return res.status(500).json({ 
             success: false, 
             error: 'RLS_POLICY_ERROR',
             message: 'خطأ في سياسات الأمان. يرجى التأكد من تشغيل ملف supabase_schema.sql على Supabase',
-            details: existingUserError.message 
+            details: existingUserError.message,
+            hint: 'اذهب إلى Supabase → SQL Editor → الصق محتوى supabase_schema.sql → Run'
           });
         }
+        
+        // إذا كان الخطأ متعلق بـ API key
+        if (existingUserError.message?.includes('Invalid API key') || existingUserError.message?.includes('JWT') || existingUserError.message?.includes('expired')) {
+          return res.status(500).json({ 
+            success: false, 
+            error: 'INVALID_API_KEY',
+            message: 'مفاتيح Supabase غير صحيحة. يرجى التحقق من Railway Variables',
+            details: existingUserError.message,
+            hint: 'تأكد من إضافة SUPABASE_URL و SUPABASE_ANON_KEY و SUPABASE_SERVICE_ROLE_KEY في Railway Variables'
+          });
+        }
+        
         return res.status(500).json({ 
           success: false, 
           error: 'SERVER_ERROR',
@@ -1383,10 +1426,21 @@ app.post('/api/register', async (req, res) => {
           details: [
             '1. تشغيل ملف supabase_schema.sql على Supabase SQL Editor',
             '2. التأكد من أن RLS معطل على جدول users أو أن هناك سياسة تسمح بإنشاء حسابات',
-            '3. إضافة SUPABASE_SERVICE_ROLE_KEY في Vercel Environment Variables (اختياري لكن موصى به)'
+            '3. إضافة SUPABASE_SERVICE_ROLE_KEY في Railway Variables (موصى به)'
           ],
           code: error.code,
-          hint: error.hint
+          hint: 'اذهب إلى Supabase → SQL Editor → الصق محتوى supabase_schema.sql → Run'
+        });
+      }
+      
+      // معالجة خاصة لأخطاء API key
+      if (error.message?.includes('Invalid API key') || error.message?.includes('JWT') || error.message?.includes('expired')) {
+        return res.status(500).json({ 
+          success: false, 
+          error: 'INVALID_API_KEY',
+          message: 'مفاتيح Supabase غير صحيحة. يرجى التحقق من Railway Variables',
+          details: error.message,
+          hint: 'تأكد من إضافة SUPABASE_URL و SUPABASE_ANON_KEY و SUPABASE_SERVICE_ROLE_KEY في Railway Variables'
         });
       }
       

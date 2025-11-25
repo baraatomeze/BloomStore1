@@ -18,6 +18,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
 async function loadAnnouncementPublic(){
     try{
         const r = await fetch('/api/announcement');
+        if (!r.ok) {
+            console.warn('⚠️ خطأ في تحميل الإعلانات:', r.status);
+            window.globalDiscount = { enabled: false, percent: 0 };
+            return;
+        }
         const j = await r.json();
         // قبول الاستجابة حتى لو كانت success: false
         if (!j || !j.announcement) {
@@ -491,7 +496,33 @@ async function handleLogin(event) {
             }
         } else {
             console.log('فشل في تسجيل الدخول:', data.error);
-            showMessage(data.error || 'البريد الإلكتروني أو كلمة المرور غير صحيحة', 'error');
+            
+            // رسائل خطأ واضحة للمستخدم
+            let errorMessage = 'البريد الإلكتروني أو كلمة المرور غير صحيحة';
+            
+            if (data.error === 'INVALID_API_KEY') {
+                errorMessage = 'خطأ في إعدادات الخادم: مفاتيح Supabase غير صحيحة. يرجى الاتصال بالدعم الفني.';
+            } else if (data.error === 'DATABASE_CONNECTION_ERROR') {
+                errorMessage = 'خطأ في الاتصال بقاعدة البيانات. يرجى المحاولة لاحقاً.';
+            } else if (data.error === 'RLS_POLICY_ERROR') {
+                errorMessage = 'خطأ في صلاحيات قاعدة البيانات. يرجى الاتصال بالدعم الفني.';
+            } else if (data.error === 'ACCOUNT_LOCKED') {
+                errorMessage = data.message || `الحساب مقفل لمدة ${data.minutes || 15} دقيقة`;
+            } else if (data.error === 'INVALID_CREDENTIALS') {
+                errorMessage = data.message || 'البريد الإلكتروني أو كلمة المرور غير صحيحة';
+            } else if (data.error === 'EMAIL_AND_PASSWORD_REQUIRED') {
+                errorMessage = 'يرجى إدخال البريد الإلكتروني وكلمة المرور';
+            } else if (data.error === 'INVALID_EMAIL_FORMAT') {
+                errorMessage = 'صيغة البريد الإلكتروني غير صحيحة';
+            } else if (data.error === 'SERVER_ERROR') {
+                errorMessage = 'حدث خطأ في الخادم. يرجى المحاولة لاحقاً.';
+            } else if (data.message) {
+                errorMessage = data.message;
+            } else if (data.error) {
+                errorMessage = data.error;
+            }
+            
+            showMessage(errorMessage, 'error');
         }
     } catch (error) {
         console.error('خطأ في الاتصال بالخادم:', error);
