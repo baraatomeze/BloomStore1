@@ -399,6 +399,14 @@ const supabaseOptions = {
   auth: {
     autoRefreshToken: false,
     persistSession: false
+  },
+  db: {
+    schema: 'public'
+  },
+  global: {
+    headers: {
+      'x-client-info': 'bloom-store'
+    }
   }
 };
 
@@ -1119,6 +1127,14 @@ app.post('/api/login', async (req, res) => {
         console.error('   - SUPABASE_URL');
         console.error('   - SUPABASE_ANON_KEY');
         console.error('   - SUPABASE_SERVICE_ROLE_KEY');
+      } else if (fetchError.message && fetchError.message.includes('fetch failed')) {
+        errorMessage = 'SUPABASE_CONNECTION_ERROR';
+        statusCode = 500;
+        console.error('❌ خطأ: فشل الاتصال بـ Supabase!');
+        console.error('   تحقق من:');
+        console.error('   1. SUPABASE_URL صحيح في Railway Variables:', supabaseUrl);
+        console.error('   2. SUPABASE_ANON_KEY أو SUPABASE_SERVICE_ROLE_KEY صحيح');
+        console.error('   3. مشروع Supabase نشط وليس معلق');
       }
       
       return res.status(statusCode).json({ 
@@ -1127,7 +1143,9 @@ app.post('/api/login', async (req, res) => {
         details: fetchError.message || 'خطأ في الاتصال بقاعدة البيانات',
         code: fetchError.code,
         hint: errorMessage === 'INVALID_API_KEY' ? 'يرجى التحقق من مفاتيح Supabase على Railway' : 
-              errorMessage === 'RLS_POLICY_ERROR' ? 'شغّل ملف supabase_schema.sql على Supabase SQL Editor' : undefined
+              errorMessage === 'RLS_POLICY_ERROR' ? 'شغّل ملف supabase_schema.sql على Supabase SQL Editor' :
+              errorMessage === 'SUPABASE_CONNECTION_ERROR' ? 'تحقق من SUPABASE_URL و SUPABASE_ANON_KEY في Railway Variables' : undefined,
+        supabaseUrl: errorMessage === 'SUPABASE_CONNECTION_ERROR' ? supabaseUrl : undefined
       });
     }
 
@@ -1343,6 +1361,22 @@ app.post('/api/register', async (req, res) => {
             message: 'مفاتيح Supabase غير صحيحة. يرجى التحقق من Railway Variables',
             details: existingUserError.message,
             hint: 'تأكد من إضافة SUPABASE_URL و SUPABASE_ANON_KEY و SUPABASE_SERVICE_ROLE_KEY في Railway Variables'
+          });
+        }
+        
+        // إذا كان الخطأ متعلق بـ fetch failed
+        if (existingUserError.message?.includes('fetch failed')) {
+          return res.status(500).json({ 
+            success: false, 
+            error: 'SUPABASE_CONNECTION_ERROR',
+            message: 'فشل الاتصال بـ Supabase. يرجى التحقق من:',
+            details: [
+              '1. SUPABASE_URL صحيح في Railway Variables',
+              '2. SUPABASE_ANON_KEY أو SUPABASE_SERVICE_ROLE_KEY صحيح',
+              '3. مشروع Supabase نشط وليس معلق'
+            ],
+            hint: 'اذهب إلى Railway → Variables → تحقق من SUPABASE_URL و SUPABASE_ANON_KEY',
+            supabaseUrl: supabaseUrl
           });
         }
         
