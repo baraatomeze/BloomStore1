@@ -45,7 +45,7 @@ app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';");
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com data:; img-src 'self' data: https:;");
   
   next();
 });
@@ -382,19 +382,17 @@ app.delete('/api/categories/:id', async (req, res) => {
 
 
 // Supabase Configuration
-const supabaseUrl = process.env.SUPABASE_URL || 'https://your-project.supabase.co';
-const supabaseKey = process.env.SUPABASE_ANON_KEY || 'your-anon-key';
+const supabaseUrl = process.env.SUPABASE_URL || 'https://mehswyfncdcvrrobjgfq.supabase.co';
+const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || null;
 
 // Validate Supabase configuration
-if (!supabaseUrl || supabaseUrl === 'https://your-project.supabase.co' || !supabaseKey || supabaseKey === 'your-anon-key') {
+if (!supabaseUrl || supabaseUrl === 'https://your-project.supabase.co' || !supabaseKey) {
   console.error('❌ خطأ: SUPABASE_URL و SUPABASE_ANON_KEY مطلوبان في Environment Variables');
-  console.error('   يرجى إنشاء ملف .env في المجلد الرئيسي وإضافة:');
-  console.error('   SUPABASE_URL=https://your-project.supabase.co');
-  console.error('   SUPABASE_ANON_KEY=your-anon-key');
-  console.error('   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key');
-  console.error('   للحصول على المفاتيح: Supabase Dashboard → Settings → API');
-  console.error('   راجع ملف FIX_API_KEY_ERROR.md للتعليمات التفصيلية');
+  console.error('   يرجى إضافة المفاتيح في Railway Variables:');
+  console.error('   - SUPABASE_URL');
+  console.error('   - SUPABASE_ANON_KEY');
+  console.error('   - SUPABASE_SERVICE_ROLE_KEY (موصى به)');
 }
 
 const supabaseOptions = {
@@ -405,7 +403,6 @@ const supabaseOptions = {
 };
 
 // Use SERVICE_ROLE_KEY if available (bypasses RLS), otherwise use ANON_KEY
-// This ensures we can create users and login even if RLS is enabled
 let supabase;
 let supabaseAdmin = null;
 
@@ -425,20 +422,11 @@ try {
     supabase = createClient(supabaseUrl, supabaseKey, supabaseOptions);
     console.log('✅ Supabase client initialized with ANON_KEY');
   } else {
-    // Fallback: إنشاء client مع قيم افتراضية لتجنب crash
     console.error('❌ Supabase credentials not configured properly!');
     console.error('   URL:', supabaseUrl);
-    console.error('   Has Valid URL:', !!hasValidUrl);
     console.error('   Has Valid Anon Key:', !!hasValidAnonKey);
     console.error('   Has Valid Service Key:', !!hasValidServiceKey);
-    console.error('');
-    console.error('📋 خطوات الإصلاح:');
-    console.error('   1. أنشئ ملف .env في المجلد الرئيسي');
-    console.error('   2. أضف مفاتيح Supabase من: Supabase Dashboard → Settings → API');
-    console.error('   3. أعد تشغيل السيرفر');
-    console.error('   4. راجع ملف FIX_API_KEY_ERROR.md للتعليمات التفصيلية');
-    console.error('');
-    // استخدام قيم صحيحة من Environment Variables حتى لو كانت افتراضية
+    // Fallback: إنشاء client مع قيم افتراضية لتجنب crash
     if (hasValidUrl) {
       supabase = createClient(supabaseUrl, supabaseKey || 'placeholder-key', supabaseOptions);
     } else {
@@ -447,12 +435,10 @@ try {
   }
 } catch (error) {
   console.error('❌ خطأ في إنشاء Supabase client:', error);
-  // Fallback: إنشاء client فارغ لتجنب crash
   try {
     supabase = createClient('https://placeholder.supabase.co', 'placeholder-key', supabaseOptions);
   } catch (fallbackError) {
     console.error('❌ فشل في إنشاء fallback client:', fallbackError);
-    // إذا فشل كل شيء، نستخدم null وسنتعامل معه في الكود
     supabase = null;
   }
 }
@@ -460,8 +446,6 @@ try {
 // التأكد من أن supabase معرف دائماً
 if (!supabase) {
   console.error('❌ خطأ خطير: فشل في تهيئة Supabase client');
-  // في Vercel، لا ننشئ client افتراضي لأنه قد يسبب مشاكل
-  // سنستخدم null وسنتعامل معه في الكود
   if (!process.env.VERCEL) {
     supabase = createClient('https://placeholder.supabase.co', 'placeholder-key', supabaseOptions);
   }
@@ -1317,7 +1301,6 @@ app.post('/api/register', async (req, res) => {
     console.log('✅ كلمة المرور قوية');
 
     // استخدام SERVICE_ROLE_KEY لتجاوز RLS (إن وُجد)، وإلا استخدام ANON_KEY
-    // ملاحظة: يجب أن تكون هناك سياسة RLS تسمح بإنشاء حسابات جديدة
     const client = supabaseAdmin || supabase;
     const isUsingAdmin = !!supabaseAdmin;
     console.log(`🔑 استخدام العميل: ${isUsingAdmin ? 'SERVICE_ROLE_KEY (Admin - يتجاوز RLS)' : 'ANON_KEY (يتطلب سياسات RLS)'}`);
@@ -1404,52 +1387,64 @@ app.post('/api/register', async (req, res) => {
     };
 
     console.log('💾 محاولة إدراج المستخدم في قاعدة البيانات...');
-    const { data: userData, error } = await client
+    const { data: userData, error: insertError } = await client
       .from('users')
       .insert([newUser])
       .select()
       .single();
     
-    if (error) {
-      console.error('❌ خطأ في إدراج المستخدم:', error);
-      console.error('   الكود:', error.code);
-      console.error('   الرسالة:', error.message);
-      console.error('   التفاصيل:', error.details);
-      console.error('   الهينت:', error.hint);
+    if (insertError) {
+      console.error('❌ خطأ في إدراج المستخدم:', insertError);
+      console.error('   الكود:', insertError.code);
+      console.error('   الرسالة:', insertError.message);
+      console.error('   التفاصيل:', insertError.details);
+      console.error('   الهينت:', insertError.hint);
       
       // معالجة خاصة لأخطاء RLS
-      if (error.code === '42501' || error.message?.includes('row-level security') || error.message?.includes('policy')) {
+      if (insertError.code === '42501' || insertError.message?.includes('row-level security') || insertError.message?.includes('policy')) {
         return res.status(500).json({ 
           success: false, 
           error: 'RLS_POLICY_ERROR',
           message: 'خطأ في سياسات الأمان (RLS). يرجى التأكد من:',
           details: [
             '1. تشغيل ملف supabase_schema.sql على Supabase SQL Editor',
-            '2. التأكد من أن RLS معطل على جدول users أو أن هناك سياسة تسمح بإنشاء حسابات',
-            '3. إضافة SUPABASE_SERVICE_ROLE_KEY في Railway Variables (موصى به)'
+            '2. التأكد من أن هناك سياسة RLS تسمح بإنشاء حسابات (INSERT)',
+            '3. إضافة SUPABASE_SERVICE_ROLE_KEY في Railway Variables (موصى به جداً)'
           ],
-          code: error.code,
-          hint: 'اذهب إلى Supabase → SQL Editor → الصق محتوى supabase_schema.sql → Run'
+          code: insertError.code,
+          hint: 'اذهب إلى Supabase → SQL Editor → الصق محتوى supabase_schema.sql → Run',
+          solution: 'أضف SUPABASE_SERVICE_ROLE_KEY في Railway Variables لتجاوز RLS'
         });
       }
       
       // معالجة خاصة لأخطاء API key
-      if (error.message?.includes('Invalid API key') || error.message?.includes('JWT') || error.message?.includes('expired')) {
+      if (insertError.message?.includes('Invalid API key') || insertError.message?.includes('JWT') || insertError.message?.includes('expired')) {
         return res.status(500).json({ 
           success: false, 
           error: 'INVALID_API_KEY',
           message: 'مفاتيح Supabase غير صحيحة. يرجى التحقق من Railway Variables',
-          details: error.message,
-          hint: 'تأكد من إضافة SUPABASE_URL و SUPABASE_ANON_KEY و SUPABASE_SERVICE_ROLE_KEY في Railway Variables'
+          details: insertError.message,
+          hint: 'تأكد من إضافة SUPABASE_URL و SUPABASE_ANON_KEY و SUPABASE_SERVICE_ROLE_KEY في Railway Variables',
+          solution: 'اذهب إلى Railway → Variables → أضف المفاتيح الصحيحة من Supabase Dashboard'
+        });
+      }
+      
+      // معالجة خاصة لأخطاء constraint violations
+      if (insertError.code === '23505' || insertError.message?.includes('duplicate key') || insertError.message?.includes('unique constraint')) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'USER_ALREADY_EXISTS',
+          message: 'البريد الإلكتروني مستخدم بالفعل',
+          details: insertError.message
         });
       }
       
       return res.status(500).json({ 
         success: false, 
         error: 'SERVER_ERROR',
-        details: error.message,
-        code: error.code,
-        hint: error.hint
+        details: insertError.message,
+        code: insertError.code,
+        hint: insertError.hint
       });
     }
 
@@ -1528,6 +1523,10 @@ app.get('/api/products', async (req, res) => {
 // الحصول على منتج واحد
 app.get('/api/products/:id', async (req, res) => {
   try {
+    if (!supabase) {
+      return res.status(500).json({ success: false, error: 'DATABASE_CONNECTION_ERROR' });
+    }
+
     const { data: product, error } = await supabase
       .from('products')
       .select('*')
@@ -2583,7 +2582,11 @@ app.get('/api/admin/profits/monthly', async (req, res) => {
 // Route محدد للملفات الثابتة قبل express.static
 app.get(/\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/, (req, res, next) => {
   try {
-    // محاولة مسارات متعددة لـ Vercel
+    // إضافة CORS headers للملفات الثابتة
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET');
+    
+    // محاولة مسارات متعددة لـ Vercel و Railway
     const paths = [
       path.join(__dirname, 'public', req.path),
       path.join(process.cwd(), 'public', req.path),
@@ -2593,6 +2596,12 @@ app.get(/\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/, (req, res, ne
     for (const filePath of paths) {
       try {
         if (fs.existsSync(filePath)) {
+          // تحديد Content-Type حسب نوع الملف
+          if (req.path.endsWith('.css')) {
+            res.setHeader('Content-Type', 'text/css; charset=utf-8');
+          } else if (req.path.endsWith('.js')) {
+            res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+          }
           return res.sendFile(filePath);
         }
       } catch (e) {
@@ -2615,7 +2624,21 @@ const publicPath = process.env.VERCEL
 
 app.use(express.static(publicPath, {
   index: false, // لا نخدم index.html تلقائياً
-  dotfiles: 'ignore'
+  dotfiles: 'ignore',
+  maxAge: '1y', // Cache للملفات الثابتة
+  etag: true,
+  lastModified: true,
+  setHeaders: (res, path) => {
+    // إضافة headers للملفات الثابتة
+    if (path.endsWith('.css')) {
+      res.setHeader('Content-Type', 'text/css; charset=utf-8');
+    } else if (path.endsWith('.js')) {
+      res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    }
+    // CORS headers للملفات الثابتة
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET');
+  }
 }));
 
 // Serve index.html for all non-API routes (SPA fallback)
